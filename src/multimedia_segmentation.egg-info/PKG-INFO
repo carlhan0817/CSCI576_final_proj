@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: multimedia-segmentation
+Version: 0.1.0
+Summary: Multimodal Long-Form Video Segmentation System
+Requires-Python: >=3.9
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: pydantic
+Requires-Dist: opencv-python
+Requires-Dist: librosa
+Requires-Dist: ffmpeg-python
+Requires-Dist: openai-whisper
+Requires-Dist: open_clip_torch
+Requires-Dist: sentence-transformers
+Requires-Dist: torch
+Requires-Dist: fastapi
+Requires-Dist: uvicorn

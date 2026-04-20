@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multimedia-segmentation"
+version = "0.1.0"
+description = "Multimodal Long-Form Video Segmentation System"
+requires-python = ">=3.9"
+dependencies = [
+    # Core
+    "numpy",
+    "pandas",
+    "pydantic",
+    
+    # Media
+    "opencv-python",
+    "librosa",
+    "ffmpeg-python",
+    
+    # AI Models
+    "openai-whisper",
+    "open_clip_torch",
+    "sentence-transformers",
+    "torch",
+    
+    # Backend
+    "fastapi",
+    "uvicorn"
+]

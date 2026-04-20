@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+src/multimedia_segmentation.egg-info/PKG-INFO
+src/multimedia_segmentation.egg-info/SOURCES.txt
+src/multimedia_segmentation.egg-info/dependency_links.txt
+src/multimedia_segmentation.egg-info/requires.txt
+src/multimedia_segmentation.egg-info/top_level.txt

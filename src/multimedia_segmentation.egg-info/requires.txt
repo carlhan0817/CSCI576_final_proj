@@ -1,0 +1,12 @@
+numpy
+pandas
+pydantic
+opencv-python
+librosa
+ffmpeg-python
+openai-whisper
+open_clip_torch
+sentence-transformers
+torch
+fastapi
+uvicorn
