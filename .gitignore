@@ -1,1 +1,36 @@
-.venv
+# Virtual environment
+.venv/
+
+# Pipeline runtime outputs (regenerated on demand)
+workspace/
+
+# Input videos (large binary files)
+videos/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Package build artifacts
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Loose log files
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
