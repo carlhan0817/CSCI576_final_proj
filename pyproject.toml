@@ -6,25 +6,33 @@ build-backend = "setuptools.build_meta"
 name = "multimedia-segmentation"
 version = "0.1.0"
 description = "Multimodal Long-Form Video Segmentation System"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
     # Core
-    "numpy",
-    "pandas",
-    "pydantic",
-    
-    # Media
-    "opencv-python",
-    "librosa",
-    "ffmpeg-python",
-    
-    # AI Models
-    "openai-whisper",
-    "open_clip_torch",
-    "sentence-transformers",
-    "torch",
-    
-    # Backend
-    "fastapi",
-    "uvicorn"
+    "numpy>=1.26",
+    "pydantic>=2.6",
+
+    # Media I/O (Phase 1)
+    "ffmpeg-python>=0.2.0",
+    "imageio-ffmpeg>=0.5.1",
+    "opencv-python>=4.9",
+
+    # ASR (Phase 1)
+    "faster-whisper>=1.0.3",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+testpaths = ["tests"]
