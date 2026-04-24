@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(.venv/Scripts/pytest tests/test_schemas.py -v)",
+      "Bash(.venv/Scripts/pytest tests/test_workspace.py::test_workspace_paths_from_mp4 tests/test_workspace.py::test_workspace_ensure_creates_dirs -v)",
+      "Bash(.venv/Scripts/pytest tests/test_workspace.py::test_synthetic_mp4_fixture_exists -v)",
+      "Bash(.venv/Scripts/python.exe -c \"from pathlib import Path; from backend.pipeline.logging_setup import get_logger; l = get_logger\\(Path\\('./x.log'\\)\\); l.info\\('hi'\\)\")",
+      "Bash(rm x.log)",
+      "Bash(.venv/Scripts/pytest tests/ -v -m \"not slow\")",
+      "Bash(.venv/Scripts/pytest tests/test_probe.py tests/test_audio.py tests/test_frames.py -v)",
+      "Bash(.venv/Scripts/python.exe -c \"import imageio_ffmpeg; print\\(imageio_ffmpeg.get_ffmpeg_exe\\(\\)\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import ffmpeg; import inspect; print\\(inspect.getsource\\(ffmpeg.probe\\)\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import imageio_ffmpeg; print\\(dir\\(imageio_ffmpeg\\)\\)\")",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv\\\\Scripts\\\\pytest tests/test_probe.py tests/test_audio.py tests/test_frames.py -v)",
+      "Bash(./.venv/Scripts/pytest tests/test_probe.py tests/test_audio.py tests/test_frames.py -v)",
+      "Bash(./.venv/Scripts/pytest tests/test_probe.py -v -s)",
+      "Bash(.venv/Scripts/pytest tests/test_transcribe.py -v -m \"not slow\")",
+      "Bash(.venv/Scripts/pytest tests/test_ingest_cli.py -v)",
+      "Bash(.venv/Scripts/pytest -v -m \"not slow\")"
+    ]
+  }
+}
