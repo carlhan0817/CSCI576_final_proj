@@ -29,3 +29,33 @@ pip install -e .
 
 
 
+## Phase 1: Ingestion
+
+Process a single MP4 into cached artifacts under `workspace/<video_stem>/`:
+
+```bash
+# Activate venv first
+python -m backend.pipeline.ingest path/to/video.mp4
+```
+
+Optional flags:
+- `--workspace DIR` — override workspace root (default: `./workspace`)
+- `--model NAME` — faster-whisper model: `tiny`, `base`, `small`, `medium` (default: `base`)
+- `--device {auto,cpu,cuda}` — inference device (default: `auto`)
+- `--force` — ignore cache and re-run all stages
+
+Artifacts produced:
+- `workspace/<stem>/meta_raw.json` — video metadata
+- `workspace/<stem>/audio_processed.wav` — mono 16 kHz PCM
+- `workspace/<stem>/frames_cache/frame_XXXXXX.jpg` — 1 FPS, longest-side 512 px
+- `workspace/<stem>/transcript.json` — sentence-level transcript with timestamps
+- `workspace/<stem>/ingest.log` — run log
+
+### Running tests
+
+```bash
+pip install -e ".[dev]"
+pytest -v -m "not slow"       # fast suite (~seconds)
+pytest -v -m slow             # real-Whisper test (downloads ~140 MB first run)
+```
+
