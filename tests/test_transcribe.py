@@ -42,7 +42,7 @@ def test_transcribe_writes_valid_transcript_json_mocked(tmp_path, synthetic_mp4,
 @pytest.mark.slow
 def test_transcribe_real_whisper_on_synthetic(tmp_path, synthetic_mp4):
     """Real faster-whisper run — structural validity only."""
-    from backend.pipeline.audio import extract_audio
+    from CSCI576_final_proj.backend.pipeline.audio import extract_audio
 
     ws = Workspace.for_video(synthetic_mp4, root=tmp_path / "workspace")
     ws.ensure()

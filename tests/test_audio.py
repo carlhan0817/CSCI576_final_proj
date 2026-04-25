@@ -1,6 +1,6 @@
 import wave
 from backend.pipeline.workspace import Workspace
-from backend.pipeline.audio import extract_audio
+from CSCI576_final_proj.backend.pipeline.audio import extract_audio
 
 
 def test_extract_audio_produces_mono_16k_wav(tmp_path, synthetic_mp4):
