@@ -16,6 +16,7 @@ class Workspace:
     def ensure(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         self.frames_dir.mkdir(parents=True, exist_ok=True)
+        self.features_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def meta_raw_path(self) -> Path:
@@ -36,3 +37,23 @@ class Workspace:
     @property
     def log_path(self) -> Path:
         return self.root / "ingest.log"
+    
+    @property
+    def features_dir(self) -> Path:
+        return self.root / "features"
+
+    @property
+    def audio_features_path(self) -> Path:
+        return self.features_dir / "audio_features.json"
+
+    @property
+    def visual_features_path(self) -> Path:
+        return self.features_dir / "visual_features.json"
+
+    @property
+    def text_features_path(self) -> Path:
+        return self.features_dir / "text_features.json"
+
+    @property
+    def metadata_path(self) -> Path:
+        return self.root / "metadata.json"

@@ -16,9 +16,19 @@ dependencies = [
     "ffmpeg-python>=0.2.0",
     "imageio-ffmpeg>=0.5.1",
     "opencv-python>=4.9",
+    "Pillow>=10.0",
 
     # ASR (Phase 1)
     "faster-whisper>=1.0.3",
+
+    # Phase 2: Visual features (CLIP)
+    "torch>=2.2",
+    "torchaudio>=2.2",
+    "transformers>=4.40",
+
+    # Phase 2: Text features (semantic embedding)
+    "sentence-transformers>=2.7",
+    "scikit-learn>=1.4",
 ]
 
 [project.optional-dependencies]

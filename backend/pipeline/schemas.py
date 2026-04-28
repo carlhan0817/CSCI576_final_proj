@@ -63,3 +63,71 @@ class Transcript(BaseModel):
     model: str
     segments: list[TranscriptSegment]
     full_text: str
+
+
+# ============================================================
+# Phase 3 Schemas: Final Metadata
+# ============================================================
+
+from typing import Literal
+
+# 10-class taxonomy from PDD §2.3
+SegmentLabel = Literal[
+    "core_content",
+    "intro",
+    "outro",
+    "sponsorship",
+    "self_promotion",
+    "recap",
+    "transition",
+    "dead_air",
+    "holding_screen",
+    "filler",
+]
+
+
+class SegmentEvidence(BaseModel):
+    """Why a segment got its label. Filled in by classify.py."""
+    visual_score: float = Field(0.0, description="Visual modality contribution to chosen label.")
+    audio_score: float = Field(0.0, description="Audio modality contribution.")
+    text_score: float = Field(0.0, description="Text modality contribution.")
+    triggered_rules: List[str] = Field(default_factory=list, description="Hard-rule names that fired in this segment.")
+
+
+class Segment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    segment_id: int = Field(..., ge=0)
+    start_sec: float = Field(..., ge=0.0)
+    end_sec: float = Field(..., ge=0.0)
+    label: SegmentLabel
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    evidence: SegmentEvidence
+    summary: str = ""
+    user_corrected: bool = False
+
+
+class Chapter(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    chapter_id: int = Field(..., ge=0)
+    start_sec: float = Field(..., ge=0.0)
+    end_sec: float = Field(..., ge=0.0)
+    title: str
+
+
+class VideoInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str
+    duration_sec: float = Field(..., ge=0.0)
+    fps: float = Field(..., gt=0.0)
+    width: int = Field(..., gt=0)
+    height: int = Field(..., gt=0)
+    analysis_version: str = "0.3.0"
+    verified_by_human: bool = False
+
+
+class Metadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    video_info: VideoInfo
+    segments: List[Segment]
+    chapters: List[Chapter]
+    skip_suggestions: List[int] = Field(default_factory=list, description="segment_ids that should be skipped")

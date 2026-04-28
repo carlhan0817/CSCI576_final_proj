@@ -6,7 +6,7 @@ from pathlib import Path
 from backend.pipeline.workspace import Workspace
 from backend.pipeline.logging_setup import get_logger
 from backend.pipeline import probe as probe_stage
-from CSCI576_final_proj.backend.pipeline import audio as audio_stage
+from backend.pipeline import audio as audio_stage
 from backend.pipeline import frames as frames_stage
 from backend.pipeline import transcribe as transcribe_stage
 
