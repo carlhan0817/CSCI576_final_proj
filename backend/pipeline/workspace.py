@@ -55,5 +55,9 @@ class Workspace:
         return self.features_dir / "text_features.json"
 
     @property
+    def text_embeddings_path(self) -> Path:
+        return self.features_dir / "text_embeddings.npy"
+
+    @property
     def metadata_path(self) -> Path:
         return self.root / "metadata.json"

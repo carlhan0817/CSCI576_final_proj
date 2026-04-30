@@ -49,10 +49,11 @@ RECAP_KEYWORDS = [
 
 
 # Tunable thresholds
-DEAD_AIR_MIN_DURATION = 5      # seconds of silence to count as dead_air
+DEAD_AIR_MIN_DURATION = 5        # seconds of silence to count as dead_air
+DEAD_AIR_RMS_THRESHOLD = 0.01    # RMS below this AND no speech → dead_air
 HOLDING_SCREEN_MIN_DURATION = 8  # seconds of low-motion + silence
-INTRO_WINDOW_SEC = 90          # search "intro" only in first N seconds
-OUTRO_WINDOW_SEC = 90          # search "outro" only in last N seconds
+INTRO_WINDOW_SEC = 90            # search "intro" only in first N seconds
+OUTRO_WINDOW_SEC = 90            # search "outro" only in last N seconds
 
 
 def _find_runs(arr: np.ndarray, min_length: int) -> List[Tuple[int, int]]:
@@ -74,9 +75,10 @@ def _find_runs(arr: np.ndarray, min_length: int) -> List[Tuple[int, int]]:
 
 
 def rule_dead_air(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """Long silence + no speech → dead_air."""
+    """Long low-energy silence (no speech AND rms below threshold) → dead_air."""
     is_speech = grid["is_speech"]
-    silent = (is_speech == 0).astype(np.int8)
+    rms = grid.get("rms_energy", np.zeros(len(is_speech), dtype=np.float32))
+    silent = ((is_speech == 0) & (rms < DEAD_AIR_RMS_THRESHOLD)).astype(np.int8)
     hits = []
     for s, e in _find_runs(silent, DEAD_AIR_MIN_DURATION):
         hits.append(RuleHit(s, e, "dead_air", "dead_air", confidence=0.9))
@@ -95,80 +97,64 @@ def rule_holding_screen(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
 
 
 def rule_sponsor_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
-    """Sentences containing sponsor phrases → sponsor candidates (extends ±15s)."""
+    """Sentences with sponsor matched_keywords → sponsorship candidates (extends ±15s)."""
     hits = []
     for seg in text_features.segments:
-        text_lower = seg.text.lower()
-        for kw in SPONSOR_KEYWORDS:
-            if kw in text_lower:
-                # Extend ±15s around the matching sentence
-                s = max(0, int(np.floor(seg.start - 15)))
-                e = min(T, int(np.ceil(seg.end + 15)))
-                hits.append(RuleHit(s, e, "sponsorship", f"sponsor_keyword:{kw}", confidence=0.85))
-                break
+        sponsor_matches = [kw for kw in seg.matched_keywords if kw.startswith("sponsor:")]
+        if sponsor_matches:
+            s = max(0, int(np.floor(seg.start - 15)))
+            e = min(T, int(np.ceil(seg.end + 15)))
+            hits.append(RuleHit(s, e, "sponsorship", sponsor_matches[0], confidence=0.85))
     return hits
 
 
 def rule_self_promo_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
     hits = []
     for seg in text_features.segments:
-        text_lower = seg.text.lower()
-        for kw in SELF_PROMO_KEYWORDS:
-            if kw in text_lower:
-                s = max(0, int(np.floor(seg.start - 5)))
-                e = min(T, int(np.ceil(seg.end + 5)))
-                hits.append(RuleHit(s, e, "self_promotion", f"self_promo_keyword:{kw}", confidence=0.75))
-                break
+        promo_matches = [kw for kw in seg.matched_keywords if kw.startswith("self_promo:")]
+        if promo_matches:
+            s = max(0, int(np.floor(seg.start - 5)))
+            e = min(T, int(np.ceil(seg.end + 5)))
+            hits.append(RuleHit(s, e, "self_promotion", promo_matches[0], confidence=0.75))
     return hits
 
 
 def rule_recap_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
     hits = []
     for seg in text_features.segments:
-        text_lower = seg.text.lower()
-        for kw in RECAP_KEYWORDS:
-            if kw in text_lower:
-                s = max(0, int(np.floor(seg.start - 5)))
-                e = min(T, int(np.ceil(seg.end + 30)))  # recaps can be longer
-                hits.append(RuleHit(s, e, "recap", f"recap_keyword:{kw}", confidence=0.7))
-                break
+        recap_matches = [kw for kw in seg.matched_keywords if kw.startswith("recap:")]
+        if recap_matches:
+            s = max(0, int(np.floor(seg.start - 5)))
+            e = min(T, int(np.ceil(seg.end + 30)))  # recaps can be longer
+            hits.append(RuleHit(s, e, "recap", recap_matches[0], confidence=0.7))
     return hits
 
 
 def rule_intro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """In the first 90s, if any intro keyword fires OR CLIP says 'title card', flag intro."""
+    """In the first 90s, if any intro matched_keyword fires, flag intro."""
     T = len(grid["is_speech"])
-    hits = []
-    
-    # Keyword-based
     for seg in text_features.segments:
         if seg.start > INTRO_WINDOW_SEC:
             break
-        text_lower = seg.text.lower()
-        for kw in INTRO_KEYWORDS:
-            if kw in text_lower:
-                e = min(T, int(np.ceil(seg.end + 10)))
-                hits.append(RuleHit(0, e, "intro", f"intro_keyword:{kw}", confidence=0.7))
-                return hits  # one hit is enough
-    
-    return hits
+        intro_matches = [kw for kw in seg.matched_keywords if kw.startswith("intro:")]
+        if intro_matches:
+            e = min(T, int(np.ceil(seg.end + 10)))
+            return [RuleHit(0, e, "intro", intro_matches[0], confidence=0.7)]
+    return []
 
 
 def rule_outro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """In the last 90s, if any outro keyword fires, flag outro."""
+    """In the last 90s, if any outro matched_keyword fires, flag outro."""
     T = len(grid["is_speech"])
     cutoff = max(0, T - OUTRO_WINDOW_SEC)
-    hits = []
     for seg in text_features.segments:
         if seg.end < cutoff:
             continue
-        text_lower = seg.text.lower()
-        for kw in OUTRO_KEYWORDS:
-            if kw in text_lower:
-                s = max(0, int(np.floor(seg.start - 5)))
-                hits.append(RuleHit(s, T, "outro", f"outro_keyword:{kw}", confidence=0.8))
-                return hits
-    return hits
+        outro_matches = [kw for kw in seg.matched_keywords if kw.startswith("outro:")]
+        if outro_matches:
+            s = max(0, int(np.floor(seg.start - 5)))
+            return [RuleHit(s, T, "outro", outro_matches[0], confidence=0.8)]
+    return []
 
 
 def run_all_rules(

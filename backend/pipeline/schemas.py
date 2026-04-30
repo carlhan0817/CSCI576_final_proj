@@ -1,39 +1,63 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
-from typing import Dict
+from typing import Dict, List, Literal, Optional
+
 
 class AudioFeatureSegment(BaseModel):
     start: float = Field(..., ge=0.0)
     end: float = Field(..., ge=0.0)
-    is_speech: bool = Field(True, description="True if human speech is detected in this window.")
+    is_speech: bool = Field(False, description="True if Silero VAD detects speech in this second.")
+    rms_energy: float = Field(0.0, ge=0.0, description="Root-mean-square amplitude of the audio chunk.")
+    spectral_centroid: float = Field(0.0, ge=0.0, description="Frequency centroid of the power spectrum (Hz).")
+    spectral_bandwidth: float = Field(0.0, ge=0.0, description="Spectral bandwidth around the centroid (Hz).")
+    zero_crossing_rate: float = Field(0.0, ge=0.0, description="Fraction of samples where the waveform crosses zero.")
+    spectral_entropy: float = Field(0.0, ge=0.0, description="[V2.1] Shannon entropy of the normalized power spectrum.")
+    audio_class: Literal["speech", "music", "silence", "noise"] = Field(
+        "silence", description="Heuristic audio class for this second."
+    )
+
 
 class AudioFeatures(BaseModel):
-    model_used: str = "silero_vad"
+    model_used: str = "silero_vad+librosa"
     segments: List[AudioFeatureSegment]
+
 
 class VisualFrameFeature(BaseModel):
     frame_index: int = Field(..., ge=0)
     timestamp_sec: float = Field(..., ge=0.0)
-    hist_diff_to_previous: float = Field(0.0, description="Color histogram difference from the previous frame. High value = likely cut.")
-    is_hard_cut: bool = Field(False, description="True if hist_diff exceeds the strict baseline threshold.")
-    clip_labels: Dict[str, float] = Field(default_factory=dict, description="Probabilities of predefined scene classes.")
+    hist_diff_to_previous: float = Field(0.0, description="HSV histogram correlation distance from the previous frame.")
+    is_hard_cut: bool = Field(False, description="True if hist_diff exceeds the cut threshold.")
+    clip_labels: Dict[str, float] = Field(default_factory=dict, description="Zero-shot CLIP probabilities per scene prompt.")
+    mean_luminance: float = Field(0.0, ge=0.0, description="Mean pixel brightness in [0, 255] (grayscale).")
+    luminance_variance: float = Field(0.0, ge=0.0, description="Variance of pixel brightness.")
+    is_black_frame: bool = Field(False, description="True if mean_luminance < 10 and luminance_variance < 50.")
+    motion_intensity: float = Field(0.0, ge=0.0, description="Mean absolute pixel difference from the previous frame.")
+    chroma_diff: float = Field(0.0, ge=0.0, description="[V2.1] Mean chroma channel difference after 4:2:0 downsampling.")
+    dct_hf_energy: float = Field(0.0, ge=0.0, description="[V2.1] Normalized high-frequency DCT energy of the frame.")
+
 
 class VisualFeatures(BaseModel):
     model_used: str = "openai/clip-vit-base-patch32"
     frames: List[VisualFrameFeature]
+
 
 class TextFeatureSegment(BaseModel):
     id: int = Field(..., ge=0)
     start: float = Field(..., ge=0.0)
     end: float = Field(..., ge=0.0)
     text: str
-    similarity_to_next: Optional[float] = Field(None, description="Cosine similarity to the sequential segment. None for the last segment.")
-    is_potential_boundary: bool = Field(False, description="True if similarity dips below a strict baseline threshold.")
+    similarity_to_next: Optional[float] = Field(None, description="Cosine similarity to the next segment. None for the last.")
+    is_potential_boundary: bool = Field(False, description="True if similarity_to_next is below threshold.")
+    matched_keywords: List[str] = Field(
+        default_factory=list,
+        description="Keyword group matches found in this segment's text (e.g. 'sponsor:sponsored by')."
+    )
+
 
 class TextFeatures(BaseModel):
     model_used: str = "all-MiniLM-L6-v2"
     segments: List[TextFeatureSegment]
+
 
 class MetaRaw(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -68,8 +92,6 @@ class Transcript(BaseModel):
 # ============================================================
 # Phase 3 Schemas: Final Metadata
 # ============================================================
-
-from typing import Literal
 
 # 10-class taxonomy from PDD §2.3
 SegmentLabel = Literal[

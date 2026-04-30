@@ -63,6 +63,14 @@ def find_boundaries(grid: Dict[str, np.ndarray]) -> List[int]:
         if is_speech[t] != is_speech[t - 1]:
             candidate_seconds.add(t)
 
+    # Signal 5: speech ↔ music and music ↔ silence transitions
+    # Strong indicator of sponsorship/intro/outro boundaries.
+    if "is_music" in grid:
+        is_music = grid["is_music"]
+        for t in range(1, T):
+            if is_music[t] != is_music[t - 1]:
+                candidate_seconds.add(t)
+
     # Sort and apply minimum-gap filter
     sorted_boundaries = sorted(candidate_seconds)
     filtered = [sorted_boundaries[0]]

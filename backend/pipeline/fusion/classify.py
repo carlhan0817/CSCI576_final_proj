@@ -20,16 +20,22 @@ from backend.pipeline.schemas import (
 from backend.pipeline.fusion.rules import RuleHit
 
 
-# Map CLIP scene label substrings to SegmentLabels (heuristic)
-# Note: depends on Phase 2's SCENE_LABELS = [
-#   "a presentation slide", "a person talking to a camera",
-#   "a screen recording of software", "a blank screen"
-# ]
+# Map CLIP scene label substrings → SegmentLabels (covers all 10 V2.1 prompts).
+# Substring matching against the raw label string (SCENE_LABELS in visual.py).
 CLIP_LABEL_TO_SEGMENT: Dict[str, str] = {
-    "blank screen": "transition",         # high prob → transition
-    "presentation slide": "core_content",  # presentation → likely main content
-    "person talking": "core_content",      # talking head → likely main content
-    "screen recording": "core_content",    # tutorial → main content
+    # Core content
+    "presentation slide": "core_content",
+    "person talking":     "core_content",
+    "screen recording":   "core_content",
+    "video game":         "core_content",
+    "animated scene":     "core_content",
+    # Structural / transition
+    "blank screen":       "transition",
+    "end credits":        "outro",
+    "title card":         "intro",
+    # Sponsor / promo
+    "advertisement":      "sponsorship",
+    "sponsor logo":       "sponsorship",
 }
 
 

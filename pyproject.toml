@@ -26,6 +26,9 @@ dependencies = [
     "torchaudio>=2.2",
     "transformers>=4.40",
 
+    # Phase 2: Audio spectral features
+    "librosa>=0.10",
+
     # Phase 2: Text features (semantic embedding)
     "sentence-transformers>=2.7",
     "scikit-learn>=1.4",

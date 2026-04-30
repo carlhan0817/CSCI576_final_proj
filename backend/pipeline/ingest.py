@@ -57,6 +57,25 @@ def run_pipeline(
     else:
         log.info("Stage 4/4: skipped (transcript.json exists)")
 
+    from backend.pipeline.features.run import run_phase2
+    if force or not ws.visual_features_path.exists() \
+             or not ws.audio_features_path.exists() \
+             or not ws.text_features_path.exists():
+        log.info("Phase 2: Extracting multimodal features")
+        run_phase2(ws, device=resolved_device, force=force)
+    else:
+        log.info("Phase 2: skipped (all feature files exist)")
+
+    try:
+        from backend.pipeline.fusion.run import run_fusion
+        if force or not ws.metadata_path.exists():
+            log.info("Phase 3: Running fusion pipeline")
+            run_fusion(ws)
+        else:
+            log.info("Phase 3: skipped (metadata.json exists)")
+    except Exception as exc:
+        log.warning("Phase 3 skipped due to error: %s", exc)
+
     log.info("Pipeline done: %s", ws.root)
     return ws
 

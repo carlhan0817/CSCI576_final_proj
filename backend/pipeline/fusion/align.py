@@ -51,13 +51,34 @@ def build_per_second_grid(
     T = int(np.ceil(duration_sec))
     grid: Dict[str, np.ndarray] = {}
 
-    # --- Audio: VAD speech intervals → per-second is_speech flag
+    # --- Audio: per-second grid (one segment per second in new schema)
     is_speech = np.zeros(T, dtype=np.int8)
+    rms_energy = np.zeros(T, dtype=np.float32)
+    spectral_centroid = np.zeros(T, dtype=np.float32)
+    spectral_bandwidth = np.zeros(T, dtype=np.float32)
+    zero_crossing_rate = np.zeros(T, dtype=np.float32)
+    spectral_entropy = np.zeros(T, dtype=np.float32)
+    is_music = np.zeros(T, dtype=np.int8)
+
     for seg in audio.segments:
-        s = max(0, int(np.floor(seg.start)))
-        e = min(T, int(np.ceil(seg.end)))
-        is_speech[s:e] = 1
+        t = int(np.floor(seg.start))
+        if t >= T:
+            continue
+        is_speech[t] = int(seg.is_speech)
+        rms_energy[t] = seg.rms_energy
+        spectral_centroid[t] = seg.spectral_centroid
+        spectral_bandwidth[t] = seg.spectral_bandwidth
+        zero_crossing_rate[t] = seg.zero_crossing_rate
+        spectral_entropy[t] = seg.spectral_entropy
+        is_music[t] = int(seg.audio_class == "music")
+
     grid["is_speech"] = is_speech
+    grid["rms_energy"] = rms_energy
+    grid["spectral_centroid"] = spectral_centroid
+    grid["spectral_bandwidth"] = spectral_bandwidth
+    grid["zero_crossing_rate"] = zero_crossing_rate
+    grid["spectral_entropy"] = spectral_entropy
+    grid["is_music"] = is_music
 
     # --- Visual: 1 FPS sampling → already per-second
     hist_diff = np.zeros(T, dtype=np.float32)
