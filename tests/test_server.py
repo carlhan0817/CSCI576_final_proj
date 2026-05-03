@@ -108,33 +108,39 @@ def fake_repo(tmp_path):
     return tmp_path
 
 
+def _make_client(workspace: Path, videos: Path, frontend: Path) -> TestClient:
+    """Build a TestClient with an explicit ServerConfig — no env vars, no module reload."""
+    from backend.server.config import ServerConfig
+    from backend.server.app import create_app
+    cfg = ServerConfig(
+        workspace_root=workspace,
+        videos_root=videos,
+        frontend_root=frontend,
+    )
+    return TestClient(create_app(cfg))
+
+
 @pytest.fixture
-def client(fake_repo, monkeypatch):
-    monkeypatch.setenv("MM_WORKSPACE", str(fake_repo / "workspace"))
-    monkeypatch.setenv("MM_VIDEOS", str(fake_repo / "videos"))
-    monkeypatch.setenv("MM_FRONTEND", str(fake_repo / "frontend"))
-
-    # Force a fresh import so create_app picks up the env each test
-    import importlib
-    import backend.server.app as app_module
-    importlib.reload(app_module)
-    return TestClient(app_module.create_app())
+def client(fake_repo):
+    return _make_client(
+        workspace=fake_repo / "workspace",
+        videos=fake_repo / "videos",
+        frontend=fake_repo / "frontend",
+    )
 
 
 @pytest.fixture
-def empty_client(tmp_path, monkeypatch):
+def empty_client(tmp_path):
     """Server pointed at empty workspace — for sad-path 'no videos' coverage."""
     (tmp_path / "workspace").mkdir()
     (tmp_path / "videos").mkdir()
     (tmp_path / "frontend" / "static").mkdir(parents=True)
     (tmp_path / "frontend" / "index.html").write_text("<html></html>")
-    monkeypatch.setenv("MM_WORKSPACE", str(tmp_path / "workspace"))
-    monkeypatch.setenv("MM_VIDEOS", str(tmp_path / "videos"))
-    monkeypatch.setenv("MM_FRONTEND", str(tmp_path / "frontend"))
-    import importlib
-    import backend.server.app as app_module
-    importlib.reload(app_module)
-    return TestClient(app_module.create_app())
+    return _make_client(
+        workspace=tmp_path / "workspace",
+        videos=tmp_path / "videos",
+        frontend=tmp_path / "frontend",
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

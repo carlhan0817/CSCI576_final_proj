@@ -1,14 +1,16 @@
 """FastAPI router for player endpoints."""
 from __future__ import annotations
-import json
-from pathlib import Path
+import logging
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from backend.pipeline.schemas import Metadata
+from backend.server.config import ServerConfig
 
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
@@ -20,7 +22,7 @@ class VideoSummary(BaseModel):
     verified_by_human: bool
 
 
-def _config(request: Request):
+def _config(request: Request) -> ServerConfig:
     return request.app.state.config
 
 
@@ -37,8 +39,9 @@ def list_videos(request: Request) -> List[VideoSummary]:
             continue
         try:
             md = Metadata.model_validate_json(meta_path.read_text())
-        except Exception:
-            continue  # silently skip corrupted entries
+        except ValidationError:
+            _log.warning("Skipping %s: metadata failed schema validation", meta_path)
+            continue
         out.append(VideoSummary(
             video_id=stem,
             filename=md.video_info.filename,

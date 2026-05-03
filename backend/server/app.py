@@ -1,6 +1,6 @@
 """FastAPI application factory for the player backend."""
 from __future__ import annotations
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -35,5 +35,4 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
 
 
 # Module-level app for `uvicorn backend.server.app:app`
-from fastapi import HTTPException  # noqa: E402  (kept after create_app for clarity)
 app = create_app()
