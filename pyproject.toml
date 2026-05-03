@@ -32,12 +32,17 @@ dependencies = [
     # Phase 2: Text features (semantic embedding)
     "sentence-transformers>=2.7",
     "scikit-learn>=1.4",
+
+    # Phase 4.5: Player backend
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-mock>=3.12",
+    "httpx>=0.27",
 ]
 
 [tool.setuptools.packages.find]
