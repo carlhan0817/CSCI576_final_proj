@@ -59,3 +59,23 @@ pytest -v -m "not slow"       # fast suite (~seconds)
 pytest -v -m slow             # real-Whisper test (downloads ~140 MB first run)
 ```
 
+## Phase 4.5: Player
+
+Run the player after a video has been ingested + analyzed end-to-end (Phases 1–3 produce `workspace/<stem>/metadata.json`).
+
+```bash
+# 1. Drop the source MP4 into ./videos/<stem>.mp4 (must match the workspace stem)
+# 2. Run the server
+uvicorn backend.server.app:app --port 8000
+
+# 3. Open http://localhost:8000/ in Chrome
+```
+
+Endpoints:
+- `GET  /api/videos`              — list analyzed videos
+- `GET  /api/metadata/{video_id}` — read metadata.json
+- `POST /api/metadata/{video_id}` — write metadata.json (full replacement; server forces `verified_by_human=true`)
+- `GET  /videos/<stem>.mp4`       — static MP4 (browser uses Range for seek)
+
+Tests: `pytest tests/test_server.py -v`
+
