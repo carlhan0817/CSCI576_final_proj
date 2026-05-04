@@ -36,6 +36,7 @@ dependencies = [
     # Phase 4.5: Player backend
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

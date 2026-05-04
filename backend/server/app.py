@@ -1,5 +1,7 @@
 """FastAPI application factory for the player backend."""
 from __future__ import annotations
+import threading
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +14,8 @@ def create_app(config: ServerConfig | None = None) -> FastAPI:
     config = config or ServerConfig.from_env()
     app = FastAPI(title="Multimedia Segmentation Player")
     app.state.config = config
+    app.state.jobs = {}
+    app.state.jobs_lock = threading.Lock()
     app.include_router(routes.router)
 
     # Static MP4 files (browser uses HTTP Range to seek)

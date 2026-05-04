@@ -15,10 +15,12 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
-async function loadVideoList() {
+async function loadVideoList(selectVideoId) {
   const r = await fetch("/api/videos");
   const list = await r.json();
   const sel = $("video-picker");
+  // Reset, keep the placeholder option
+  sel.innerHTML = '<option value="">— pick a video —</option>';
   for (const v of list) {
     const opt = document.createElement("option");
     opt.value = v.video_id;
@@ -26,6 +28,103 @@ async function loadVideoList() {
       (v.verified_by_human ? " ✓" : "");
     sel.appendChild(opt);
   }
+  if (selectVideoId) {
+    sel.value = selectVideoId;
+    if (sel.value === selectVideoId) {
+      await loadVideo(selectVideoId);
+    }
+  }
+}
+
+// ── Upload + background-job polling ──────────────────────────────────────────
+const POLL_INTERVAL_MS = 2000;
+
+function setUploadStatus(msg, kind) {
+  const el = $("upload-status");
+  el.textContent = msg;
+  el.className = kind ? `upload-${kind}` : "";
+}
+
+async function uploadVideo() {
+  const input = $("upload-file");
+  const btn = $("upload-btn");
+  const f = input.files && input.files[0];
+  if (!f) {
+    setUploadStatus("pick an .mp4 file first", "error");
+    return;
+  }
+  if (!f.name.toLowerCase().endsWith(".mp4")) {
+    setUploadStatus("only .mp4 accepted", "error");
+    return;
+  }
+
+  btn.disabled = true;
+  input.disabled = true;
+  setUploadStatus(`uploading ${f.name} (${(f.size / 1e6).toFixed(1)} MB)…`, "running");
+
+  const fd = new FormData();
+  fd.append("file", f, f.name);
+
+  let resp;
+  try {
+    resp = await fetch("/api/upload", { method: "POST", body: fd });
+  } catch (e) {
+    setUploadStatus("upload network error: " + e, "error");
+    btn.disabled = false;
+    input.disabled = false;
+    return;
+  }
+  if (!resp.ok) {
+    let detail = String(resp.status);
+    try { detail += " " + JSON.stringify(await resp.json()); } catch (_) {}
+    setUploadStatus("upload failed: " + detail, "error");
+    btn.disabled = false;
+    input.disabled = false;
+    return;
+  }
+  const { job_id, video_id, filename } = await resp.json();
+  setUploadStatus(`queued (${filename}). analyzing… this can take several minutes.`, "running");
+  pollJob(job_id, video_id);
+}
+
+function pollJob(jobId, videoId) {
+  const btn = $("upload-btn");
+  const input = $("upload-file");
+  const handle = setInterval(async () => {
+    let r;
+    try {
+      r = await fetch(`/api/jobs/${jobId}`);
+    } catch (e) {
+      setUploadStatus("poll error: " + e, "error");
+      return;
+    }
+    if (!r.ok) {
+      clearInterval(handle);
+      setUploadStatus(`job lookup failed: ${r.status}`, "error");
+      btn.disabled = false;
+      input.disabled = false;
+      return;
+    }
+    const job = await r.json();
+    const elapsed = Math.round(job.elapsed_sec || 0);
+    if (job.status === "queued") {
+      setUploadStatus(`queued… (${elapsed}s)`, "running");
+    } else if (job.status === "running") {
+      setUploadStatus(`analyzing ${job.filename}… (${elapsed}s elapsed)`, "running");
+    } else if (job.status === "done") {
+      clearInterval(handle);
+      setUploadStatus(`done in ${elapsed}s — ${job.video_id} loaded`, "ok");
+      btn.disabled = false;
+      input.disabled = false;
+      input.value = "";
+      await loadVideoList(videoId);
+    } else if (job.status === "error") {
+      clearInterval(handle);
+      setUploadStatus(`failed: ${job.error || "unknown error"}`, "error");
+      btn.disabled = false;
+      input.disabled = false;
+    }
+  }, POLL_INTERVAL_MS);
 }
 
 async function loadVideo(videoId) {
@@ -172,4 +271,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("player").addEventListener("timeupdate", onTimeUpdate);
   $("save-edits").addEventListener("click", saveEdits);
+  $("upload-btn").addEventListener("click", uploadVideo);
 });

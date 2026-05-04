@@ -19,7 +19,8 @@
       "Bash(./.venv/Scripts/pytest tests/test_probe.py -v -s)",
       "Bash(.venv/Scripts/pytest tests/test_transcribe.py -v -m \"not slow\")",
       "Bash(.venv/Scripts/pytest tests/test_ingest_cli.py -v)",
-      "Bash(.venv/Scripts/pytest -v -m \"not slow\")"
+      "Bash(.venv/Scripts/pytest -v -m \"not slow\")",
+      "Bash(git ls-tree *)"
     ]
   }
 }

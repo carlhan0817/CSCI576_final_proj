@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python -c \"import fastapi; import uvicorn; import httpx; print\\('fastapi:', fastapi.__version__\\); print\\('uvicorn:', uvicorn.__version__\\); print\\('httpx:', httpx.__version__\\)\")",
+      "Bash(python -c \"import backend.server; print\\('backend.server package imported successfully'\\)\")",
+      "Bash(python -m pytest tests/test_server.py::test_server_config_resolves_defaults_to_repo_paths -v)",
+      "Bash(python -m pytest tests/test_server.py -v)",
+      "Bash(python -m pytest tests/test_server.py -v -k get_videos)",
+      "Bash(python -m pytest tests/test_server.py -v -k \"get_videos or server_config\")",
+      "Bash(pytest tests/test_server.py -v)",
+      "Bash(python -c \"import ast, sys; tree = ast.parse\\(open\\('backend/server/routes.py'\\).read\\(\\)\\); names = {node.names[0].name if hasattr\\(node, 'names'\\) else node.module for node in ast.walk\\(tree\\) if isinstance\\(node, \\(ast.Import, ast.ImportFrom\\)\\)}; print\\(names\\)\")",
+      "Bash(python -m pytest tests/test_server.py -v --co)",
+      "Bash(python -c \"from backend.server.app import create_app; app = create_app\\(\\); print\\('app routes:'\\); [print\\(' ', r.path, list\\(r.methods or []\\)\\) for r in app.routes]\")",
+      "Bash(.venv/Scripts/python.exe -m pip install \"python-multipart>=0.0.9\")",
+      "Bash(.venv/Scripts/python.exe -c \"from backend.server.app import create_app; app = create_app\\(\\); [print\\(r.path, list\\(r.methods or []\\)\\) for r in app.routes if hasattr\\(r, 'methods'\\)]\")"
+    ]
+  }
+}
