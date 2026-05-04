@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace
 
-from CSCI576_final_proj.backend.pipeline import audio
+from backend.pipeline import audio
 from backend.pipeline import transcribe as transcribe_mod
 from backend.pipeline import ingest as ingest_mod
 

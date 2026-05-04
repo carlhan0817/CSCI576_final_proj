@@ -44,10 +44,14 @@ class TestDetectBlackFrame:
         assert is_black is False
 
     def test_near_black_high_variance_not_flagged(self):
-        # A low-luminance frame with a bright spot should NOT be flagged.
+        # A low-luminance frame with substantial content (e.g. a dark night scene
+        # with text or shapes) should NOT be flagged as a pure black frame.
+        # Variance must exceed BLACK_FRAME_VARIANCE_MAX (=50) to express "real content".
         gray = np.zeros((100, 100), dtype=np.uint8)
-        gray[50, 50] = 200
-        _, _, is_black = _detect_black_frame(gray)
+        # Add a 20×20 patch of mid-gray — enough variance to clear var_max=50
+        gray[40:60, 40:60] = 80
+        _, var_lum, is_black = _detect_black_frame(gray)
+        assert var_lum > 50.0  # sanity check: this case actually has high variance
         assert is_black is False
 
 

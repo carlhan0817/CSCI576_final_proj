@@ -22,8 +22,8 @@ dependencies = [
     "faster-whisper>=1.0.3",
 
     # Phase 2: Visual features (CLIP)
-    "torch>=2.2",
-    "torchaudio>=2.2",
+    "torch==2.7.1",
+    "torchaudio==2.7.1",
     "transformers>=4.40",
 
     # Phase 2: Audio spectral features
