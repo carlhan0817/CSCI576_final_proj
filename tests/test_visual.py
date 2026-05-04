@@ -44,9 +44,9 @@ class TestDetectBlackFrame:
         assert is_black is False
 
     def test_near_black_high_variance_not_flagged(self):
-        # A low-luminance frame with a bright spot should NOT be flagged.
+        # A 5×5 bright patch in a black frame gives variance ≈ 100 > threshold 50.
         gray = np.zeros((100, 100), dtype=np.uint8)
-        gray[50, 50] = 200
+        gray[48:53, 48:53] = 200
         _, _, is_black = _detect_black_frame(gray)
         assert is_black is False
 

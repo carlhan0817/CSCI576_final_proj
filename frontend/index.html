@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Multimedia Segmentation Player</title>
+  <link rel="stylesheet" href="/static/player.css">
+</head>
+<body>
+  <h1>Player</h1>
+
+  <label for="video-picker">Video:</label>
+  <select id="video-picker"><option value="">— pick a video —</option></select>
+
+  <div>
+    <video id="player" controls width="640" preload="metadata"></video>
+  </div>
+
+  <div id="timeline" title="click a segment to seek"></div>
+
+  <div id="controls">
+    <button id="next-seg" type="button">Next Segment</button>
+    <label>
+      <input type="checkbox" id="skip-non-content"> Skip non-content
+    </label>
+    <button id="save-edits" type="button">Save to Server</button>
+    <span id="status"></span>
+  </div>
+
+  <table id="segment-table">
+    <thead>
+      <tr>
+        <th>id</th><th>start</th><th>end</th><th>label</th>
+        <th>confidence</th><th>summary</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script src="/static/player.js" defer></script>
+</body>
+</html>
