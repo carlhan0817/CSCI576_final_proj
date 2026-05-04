@@ -1,6 +1,7 @@
 """FastAPI router for player endpoints."""
 from __future__ import annotations
 import logging
+import os
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Request
@@ -24,6 +25,40 @@ class VideoSummary(BaseModel):
 
 def _config(request: Request) -> ServerConfig:
     return request.app.state.config
+
+
+@router.get("/metadata/{video_id}", response_model=Metadata)
+def get_metadata(video_id: str, request: Request) -> Metadata:
+    cfg = _config(request)
+    meta_path = cfg.workspace_root / video_id / "metadata.json"
+    if not meta_path.exists():
+        raise HTTPException(status_code=404, detail=f"metadata not found for video '{video_id}'")
+    try:
+        return Metadata.model_validate_json(meta_path.read_text())
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"metadata invalid: {exc}")
+
+
+def _atomic_write_text(path, text: str) -> None:
+    """Write to <path>.tmp then os.replace onto <path> — crash-safe."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    os.replace(str(tmp), str(path))
+
+
+@router.post("/metadata/{video_id}", response_model=Metadata)
+def save_metadata(video_id: str, body: Metadata, request: Request) -> Metadata:
+    cfg = _config(request)
+    workspace_dir = cfg.workspace_root / video_id
+    if not workspace_dir.exists():
+        raise HTTPException(status_code=404, detail=f"workspace for '{video_id}' not found")
+
+    # Server-enforced invariant: any successful POST means a human reviewed it.
+    body.video_info.verified_by_human = True
+
+    meta_path = workspace_dir / "metadata.json"
+    _atomic_write_text(meta_path, body.model_dump_json(indent=2))
+    return body
 
 
 @router.get("/videos", response_model=List[VideoSummary])

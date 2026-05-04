@@ -164,3 +164,72 @@ def test_get_videos_returns_empty_list_when_no_videos_sad_a(empty_client):
     r = empty_client.get("/api/videos")
     assert r.status_code == 200
     assert r.json() == []
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GET /api/metadata/{video_id}
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_get_metadata_happy(client):
+    r = client.get("/api/metadata/demo")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["video_info"]["filename"] == "demo.mp4"
+    assert len(body["segments"]) == 2
+    assert body["segments"][0]["label"] == "core_content"
+    assert body["segments"][1]["label"] == "sponsorship"
+
+
+def test_get_metadata_404_when_missing_sad_b(client):
+    r = client.get("/api/metadata/does-not-exist")
+    assert r.status_code == 404
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# POST /api/metadata/{video_id}
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_post_metadata_persists_edit_and_forces_verified(client, fake_repo):
+    edited = json.loads(json.dumps(VALID_METADATA))  # deep copy
+    edited["segments"][1]["label"] = "core_content"
+    edited["segments"][1]["user_corrected"] = True
+    # Client sets verified_by_human=False; server must force it to True.
+    edited["video_info"]["verified_by_human"] = False
+
+    r = client.post("/api/metadata/demo", json=edited)
+    assert r.status_code == 200
+    returned = r.json()
+    assert returned["video_info"]["verified_by_human"] is True
+    assert returned["segments"][1]["label"] == "core_content"
+    assert returned["segments"][1]["user_corrected"] is True
+
+    # On-disk persistence
+    on_disk = json.loads((fake_repo / "workspace" / "demo" / "metadata.json").read_text())
+    assert on_disk["video_info"]["verified_by_human"] is True
+    assert on_disk["segments"][1]["label"] == "core_content"
+    assert on_disk["segments"][1]["user_corrected"] is True
+
+
+def test_post_metadata_404_when_workspace_missing_sad_e(client):
+    r = client.post("/api/metadata/does-not-exist", json=VALID_METADATA)
+    assert r.status_code == 404
+
+
+def test_post_metadata_422_on_invalid_body_sad_d(client):
+    bad = {"video_info": {}, "segments": "not a list"}
+    r = client.post("/api/metadata/demo", json=bad)
+    assert r.status_code == 422
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Static MP4 mount
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_get_existing_mp4_happy(client):
+    r = client.get("/videos/demo.mp4")
+    assert r.status_code == 200
+
+
+def test_get_missing_mp4_404_sad_g(client):
+    r = client.get("/videos/missing.mp4")
+    assert r.status_code == 404
