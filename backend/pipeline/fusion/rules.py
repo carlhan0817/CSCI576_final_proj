@@ -155,16 +155,21 @@ def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     """Multi-signal ad detector.
 
     Fires when ALL of the following hold over a contiguous run of length ≥ AD_BLOCK_MIN_DURATION:
-      1. style_drift[t] >= AD_BLOCK_DRIFT_THRESHOLD for every t in the run (visual style discontinuity).
-      2. At least one OCR commercial pattern (URL / price / phone / CTA / brand-lockup) within the run.
-    Confidence is boosted to AD_BLOCK_BOUNDED_CONFIDENCE when both run boundaries are within
+      1. EITHER style_drift[t] OR audio_drift[t] >= AD_BLOCK_DRIFT_THRESHOLD (visual or acoustic discontinuity).
+      2. At least one commercial signal (URL / price / phone / OCR-CTA / brand-lockup / transcript-CTA) within the run.
+    Confidence boosts to AD_BLOCK_BOUNDED_CONFIDENCE when both run boundaries are within
     AD_BLOCK_BOUNDARY_TOLERANCE of a hard cut; otherwise AD_BLOCK_BASE_CONFIDENCE.
     """
-    drift = grid.get("style_drift")
-    if drift is None:
+    visual_drift = grid.get("style_drift")
+    audio_drift = grid.get("audio_drift")
+    if visual_drift is None and audio_drift is None:
         return []
 
-    hot = (drift >= AD_BLOCK_DRIFT_THRESHOLD).astype(np.int8)
+    T = len(visual_drift) if visual_drift is not None else len(audio_drift)
+    v = visual_drift if visual_drift is not None else np.zeros(T, dtype=np.float32)
+    a = audio_drift if audio_drift is not None else np.zeros(T, dtype=np.float32)
+
+    hot = ((v >= AD_BLOCK_DRIFT_THRESHOLD) | (a >= AD_BLOCK_DRIFT_THRESHOLD)).astype(np.int8)
     hits: List[RuleHit] = []
     for s, e in _find_runs(hot, AD_BLOCK_MIN_DURATION):
         if not _has_any_commercial_signal(grid, s, e):

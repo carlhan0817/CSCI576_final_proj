@@ -309,3 +309,26 @@ class TestRuleAdBlock:
         assert len(hits) == 1
         assert hits[0].confidence < 0.85
         assert hits[0].confidence >= 0.6
+
+    def test_audio_drift_alone_with_ocr_can_fire(self):
+        """rule_ad_block fires when audio drift is sustained even if visual drift is flat."""
+        from backend.pipeline.fusion.rules import rule_ad_block
+
+        T = 200
+        g = self._build_grid(T=T, drift_high=[], ocr_hit_t=60, hard_cuts=[49, 81])
+        g["audio_drift"] = np.zeros(T, dtype=np.float32)
+        g["audio_drift"][50:80] = 0.6  # 30s of audio anomaly
+
+        hits = rule_ad_block(g)
+        assert len(hits) == 1
+        assert hits[0].label == "sponsorship"
+        assert hits[0].rule_name == "ad_block"
+
+    def test_neither_drift_does_not_fire(self):
+        from backend.pipeline.fusion.rules import rule_ad_block
+
+        T = 200
+        g = self._build_grid(T=T, drift_high=[], ocr_hit_t=60, hard_cuts=[49, 81])
+        g["audio_drift"] = np.zeros(T, dtype=np.float32)
+        hits = rule_ad_block(g)
+        assert hits == []

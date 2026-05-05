@@ -220,3 +220,26 @@ def test_grid_includes_clip_embedding_drift_and_ocr_flags():
     for k in ("has_price", "has_phone", "has_cta", "has_brand_lockup"):
         assert k in grid
         assert grid[k].shape == (T,)
+
+
+def test_grid_includes_audio_drift():
+    # 60s lecture-like MFCC + 60s ad-like MFCC.
+    T = 120
+    lecture_mfcc = [10.0] + [0.0] * 19
+    ad_mfcc = [0.0, 10.0] + [0.0] * 18
+    audio = AudioFeatures(segments=[
+        AudioFeatureSegment(
+            start=float(t), end=float(t + 1),
+            mfcc=(lecture_mfcc if t < 60 else ad_mfcc),
+        )
+        for t in range(T)
+    ])
+    visual = VisualFeatures(frames=[])
+    text = TextFeatures(segments=[])
+
+    grid = build_per_second_grid(visual, audio, text, duration_sec=float(T))
+
+    assert "audio_drift" in grid
+    assert grid["audio_drift"].shape == (T,)
+    # Drift should peak around the regime change at t=60 vs deep interior at t=20.
+    assert grid["audio_drift"][60] > grid["audio_drift"][20] + 0.1

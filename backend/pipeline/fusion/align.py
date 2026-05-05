@@ -80,6 +80,22 @@ def build_per_second_grid(
     grid["spectral_entropy"] = spectral_entropy
     grid["is_music"] = is_music
 
+    # ── Audio: MFCC matrix + per-second audio style drift ─────────────────────
+    mfcc_dim = (
+        len(audio.segments[0].mfcc) if audio.segments and audio.segments[0].mfcc else 0
+    )
+    if mfcc_dim > 0:
+        mfcc_matrix = np.zeros((T, mfcc_dim), dtype=np.float32)
+        for seg in audio.segments:
+            t = int(np.floor(seg.start))
+            if t >= T or not seg.mfcc:
+                continue
+            mfcc_matrix[t] = np.array(seg.mfcc, dtype=np.float32)
+        from backend.pipeline.fusion.style_drift import compute_drift
+        grid["audio_drift"] = compute_drift(mfcc_matrix, window_sec=15)
+    else:
+        grid["audio_drift"] = np.zeros(T, dtype=np.float32)
+
     # --- Visual: 1 FPS sampling → already per-second
     hist_diff = np.zeros(T, dtype=np.float32)
     is_hard_cut = np.zeros(T, dtype=np.int8)
