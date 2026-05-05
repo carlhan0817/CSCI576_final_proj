@@ -1,6 +1,10 @@
 """Tests for backend/pipeline/features/ocr_signals.py — pattern detection only."""
 from __future__ import annotations
 
+import os
+
+import cv2
+import numpy as np
 import pytest
 
 from backend.pipeline.features.ocr_signals import detect_commercial_patterns
@@ -74,3 +78,22 @@ class TestEmptyAndNoise:
     def test_only_whitespace(self):
         out = detect_commercial_patterns(["   ", ""])
         assert all(v is False for v in out.values())
+
+
+@pytest.mark.skipif(
+    os.environ.get("RUN_OCR_TESTS") != "1",
+    reason="Heavy OCR test — set RUN_OCR_TESTS=1 to enable.",
+)
+def test_extract_text_reads_white_on_black():
+    """Render the word 'SHOP NOW' and verify RapidOCR finds it."""
+    from backend.pipeline.features.ocr_signals import extract_text
+
+    img = np.zeros((100, 400, 3), dtype=np.uint8)
+    cv2.putText(
+        img, "SHOP NOW", (20, 70), cv2.FONT_HERSHEY_SIMPLEX,
+        2.0, (255, 255, 255), 4, cv2.LINE_AA,
+    )
+
+    texts = extract_text(img)
+    joined = " ".join(texts)
+    assert "shop" in joined or "now" in joined, f"OCR failed; got {texts!r}"
