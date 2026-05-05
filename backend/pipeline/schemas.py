@@ -15,6 +15,10 @@ class AudioFeatureSegment(BaseModel):
     audio_class: Literal["speech", "music", "silence", "noise"] = Field(
         "silence", description="Heuristic audio class for this second."
     )
+    mfcc: List[float] = Field(
+        default_factory=list,
+        description="MFCC coefficients (20 by default) for this second. Used for audio style drift.",
+    )
 
 
 class AudioFeatures(BaseModel):

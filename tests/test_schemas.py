@@ -71,3 +71,17 @@ def test_visual_frame_feature_defaults_keep_backcompat():
     assert f.ocr_text == ""
     assert f.has_url is False
     assert f.has_brand_lockup is False
+
+
+def test_audio_feature_segment_supports_mfcc():
+    from backend.pipeline.schemas import AudioFeatureSegment
+
+    s = AudioFeatureSegment(start=0.0, end=1.0, mfcc=[0.1] * 20)
+    assert len(s.mfcc) == 20
+
+
+def test_audio_feature_segment_mfcc_default_empty():
+    from backend.pipeline.schemas import AudioFeatureSegment
+
+    s = AudioFeatureSegment(start=0.0, end=1.0)
+    assert s.mfcc == []
