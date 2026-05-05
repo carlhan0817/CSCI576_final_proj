@@ -122,6 +122,62 @@ def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     return hits
 
 
+# Tunable thresholds for rule_ad_block
+AD_BLOCK_DRIFT_THRESHOLD = 0.30      # cosine-distance threshold to call a second "anomalous"
+AD_BLOCK_MIN_DURATION = 10           # min length of a sustained-drift run (seconds)
+AD_BLOCK_BOUNDARY_TOLERANCE = 3      # how close a hard cut must be to count as "bounding"
+AD_BLOCK_BASE_CONFIDENCE = 0.7       # confidence when only drift+OCR agree
+AD_BLOCK_BOUNDED_CONFIDENCE = 0.9    # confidence when also bounded by hard cuts
+
+
+def _has_any_commercial_signal(grid: Dict[str, np.ndarray], s: int, e: int) -> bool:
+    """True iff at least one OCR commercial flag is set anywhere in [s, e)."""
+    for key in ("has_url", "has_price", "has_phone", "has_cta", "has_brand_lockup"):
+        arr = grid.get(key)
+        if arr is None:
+            continue
+        if arr[s:e].any():
+            return True
+    return False
+
+
+def _has_bounding_cut(grid: Dict[str, np.ndarray], t: int, tolerance: int) -> bool:
+    cuts = grid.get("is_hard_cut")
+    if cuts is None:
+        return False
+    lo = max(0, t - tolerance)
+    hi = min(len(cuts), t + tolerance + 1)
+    return bool(cuts[lo:hi].any())
+
+
+def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+    """Multi-signal ad detector.
+
+    Fires when ALL of the following hold over a contiguous run of length ≥ AD_BLOCK_MIN_DURATION:
+      1. style_drift[t] >= AD_BLOCK_DRIFT_THRESHOLD for every t in the run (visual style discontinuity).
+      2. At least one OCR commercial pattern (URL / price / phone / CTA / brand-lockup) within the run.
+    Confidence is boosted to AD_BLOCK_BOUNDED_CONFIDENCE when both run boundaries are within
+    AD_BLOCK_BOUNDARY_TOLERANCE of a hard cut; otherwise AD_BLOCK_BASE_CONFIDENCE.
+    """
+    drift = grid.get("style_drift")
+    if drift is None:
+        return []
+
+    hot = (drift >= AD_BLOCK_DRIFT_THRESHOLD).astype(np.int8)
+    hits: List[RuleHit] = []
+    for s, e in _find_runs(hot, AD_BLOCK_MIN_DURATION):
+        if not _has_any_commercial_signal(grid, s, e):
+            continue
+        bounded = (
+            _has_bounding_cut(grid, s, AD_BLOCK_BOUNDARY_TOLERANCE)
+            and _has_bounding_cut(grid, e, AD_BLOCK_BOUNDARY_TOLERANCE)
+        )
+        conf = AD_BLOCK_BOUNDED_CONFIDENCE if bounded else AD_BLOCK_BASE_CONFIDENCE
+        hits.append(RuleHit(s, e, "sponsorship", "ad_block", confidence=conf))
+
+    return hits
+
+
 def rule_holding_screen(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     """Low visual motion + no speech for a long time → likely holding/title screen."""
     hist_diff = grid["hist_diff"]
@@ -208,5 +264,6 @@ def run_all_rules(
     all_hits.extend(rule_recap_keyword(text_features, T))
     all_hits.extend(rule_intro_window(text_features, grid))
     all_hits.extend(rule_outro_window(text_features, grid))
+    all_hits.extend(rule_ad_block(grid))
     all_hits.extend(rule_ad_break(grid))
     return all_hits

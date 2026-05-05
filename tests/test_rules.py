@@ -247,3 +247,65 @@ class TestRunAllRules:
         keyword_labels = {"sponsorship", "self_promotion", "recap", "intro", "outro"}
         for h in hits:
             assert h.label not in keyword_labels
+
+
+class TestRuleAdBlock:
+    """rule_ad_block requires (a) sustained high style_drift, (b) at least one
+    OCR commercial pattern hit, (c) bounding hard-cuts."""
+
+    def _build_grid(self, T, drift_high, ocr_hit_t, hard_cuts):
+        g = _grid(T)
+        g["style_drift"] = np.zeros(T, dtype=np.float32)
+        for s, e in drift_high:
+            g["style_drift"][s:e] = 0.6
+        g["has_url"] = np.zeros(T, dtype=np.int8)
+        g["has_price"] = np.zeros(T, dtype=np.int8)
+        g["has_phone"] = np.zeros(T, dtype=np.int8)
+        g["has_cta"] = np.zeros(T, dtype=np.int8)
+        g["has_brand_lockup"] = np.zeros(T, dtype=np.int8)
+        if ocr_hit_t is not None:
+            g["has_url"][ocr_hit_t] = 1
+        for c in hard_cuts:
+            g["is_hard_cut"][c] = 1
+        return g
+
+    def test_drift_with_ocr_and_cut_fires(self):
+        from backend.pipeline.fusion.rules import rule_ad_block
+        # 30-second drift block from t=50 to t=80, OCR url at t=60, cuts at 49 and 81
+        g = self._build_grid(T=200, drift_high=[(50, 80)], ocr_hit_t=60, hard_cuts=[49, 81])
+        hits = rule_ad_block(g)
+        assert len(hits) == 1
+        h = hits[0]
+        assert h.label == "sponsorship"
+        assert h.rule_name == "ad_block"
+        assert 49 <= h.start_sec <= 51 and 79 <= h.end_sec <= 82
+        assert h.confidence >= 0.85
+
+    def test_drift_without_ocr_does_not_fire(self):
+        from backend.pipeline.fusion.rules import rule_ad_block
+        g = self._build_grid(T=200, drift_high=[(50, 80)], ocr_hit_t=None, hard_cuts=[49, 81])
+        hits = rule_ad_block(g)
+        assert hits == []
+
+    def test_short_drift_below_min_duration_does_not_fire(self):
+        from backend.pipeline.fusion.rules import rule_ad_block
+        # 5-second drift is too short
+        g = self._build_grid(T=200, drift_high=[(50, 55)], ocr_hit_t=52, hard_cuts=[49, 56])
+        hits = rule_ad_block(g)
+        assert hits == []
+
+    def test_ocr_outside_drift_block_does_not_count(self):
+        from backend.pipeline.fusion.rules import rule_ad_block
+        # OCR url 30s away from the drift block — the rule should not pair them.
+        g = self._build_grid(T=200, drift_high=[(50, 80)], ocr_hit_t=20, hard_cuts=[49, 81])
+        hits = rule_ad_block(g)
+        assert hits == []
+
+    def test_no_hard_cut_boundary_still_fires_at_lower_confidence(self):
+        from backend.pipeline.fusion.rules import rule_ad_block
+        # Drift + OCR but no cut ⇒ still fire (drift+OCR is enough), but confidence lower.
+        g = self._build_grid(T=200, drift_high=[(50, 80)], ocr_hit_t=60, hard_cuts=[])
+        hits = rule_ad_block(g)
+        assert len(hits) == 1
+        assert hits[0].confidence < 0.85
+        assert hits[0].confidence >= 0.6
