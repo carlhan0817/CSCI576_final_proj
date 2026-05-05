@@ -108,17 +108,18 @@ def rule_dead_air(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
 
 
 def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """Long stretch of no speech (allowing brief bursts) → high-confidence sponsorship.
+    """Long stretch of no speech → ADVISORY-confidence sponsorship.
 
-    Targets ad inserts that don't trip our keyword list because the host's voice
-    is replaced by ad audio (music/VO) without sponsor catchphrases.
+    Originally a strong signal, demoted because is_speech-only blocks generate
+    too many false positives on animation / sports / news content. Use as a
+    tiebreaker; rule_ad_block carries the high-confidence detection.
     """
     is_speech = grid["is_speech"]
     quiet = (is_speech == 0).astype(np.int8)
     quiet_closed = _close_short_gaps(quiet, AD_BREAK_MAX_GAP)
     hits = []
     for s, e in _find_runs(quiet_closed, AD_BREAK_MIN_DURATION):
-        hits.append(RuleHit(s, e, "sponsorship", "ad_break", confidence=0.85))
+        hits.append(RuleHit(s, e, "sponsorship", "ad_break", confidence=0.5))
     return hits
 
 
