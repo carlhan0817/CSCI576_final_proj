@@ -42,3 +42,32 @@ def test_transcript_segment_rejects_negative_start():
     from pydantic import ValidationError
     with pytest.raises(ValidationError):
         TranscriptSegment(id=0, start=-0.1, end=1.0, text="x")
+
+
+def test_visual_frame_feature_supports_embedding_and_ocr():
+    from backend.pipeline.schemas import VisualFrameFeature
+
+    f = VisualFrameFeature(
+        frame_index=0,
+        timestamp_sec=0.0,
+        clip_embedding=[0.1] * 512,
+        ocr_text="visit example.com",
+        has_url=True,
+        has_price=False,
+        has_phone=False,
+        has_cta=False,
+        has_brand_lockup=False,
+    )
+    assert len(f.clip_embedding) == 512
+    assert f.has_url is True
+    assert f.ocr_text == "visit example.com"
+
+
+def test_visual_frame_feature_defaults_keep_backcompat():
+    from backend.pipeline.schemas import VisualFrameFeature
+
+    f = VisualFrameFeature(frame_index=0, timestamp_sec=0.0)
+    assert f.clip_embedding == []
+    assert f.ocr_text == ""
+    assert f.has_url is False
+    assert f.has_brand_lockup is False

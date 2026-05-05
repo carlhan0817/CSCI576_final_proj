@@ -28,12 +28,19 @@ class VisualFrameFeature(BaseModel):
     hist_diff_to_previous: float = Field(0.0, description="HSV histogram correlation distance from the previous frame.")
     is_hard_cut: bool = Field(False, description="True if hist_diff exceeds the cut threshold.")
     clip_labels: Dict[str, float] = Field(default_factory=dict, description="Zero-shot CLIP probabilities per scene prompt.")
+    clip_embedding: List[float] = Field(default_factory=list, description="Pooled CLIP image embedding (512-d for ViT-B/32).")
     mean_luminance: float = Field(0.0, ge=0.0, description="Mean pixel brightness in [0, 255] (grayscale).")
     luminance_variance: float = Field(0.0, ge=0.0, description="Variance of pixel brightness.")
     is_black_frame: bool = Field(False, description="True if mean_luminance < 10 and luminance_variance < 50.")
     motion_intensity: float = Field(0.0, ge=0.0, description="Mean absolute pixel difference from the previous frame.")
     chroma_diff: float = Field(0.0, ge=0.0, description="[V2.1] Mean chroma channel difference after 4:2:0 downsampling.")
     dct_hf_energy: float = Field(0.0, ge=0.0, description="[V2.1] Normalized high-frequency DCT energy of the frame.")
+    ocr_text: str = Field("", description="Concatenated text detected on screen by OCR (lowercased, deduped).")
+    has_url: bool = Field(False, description="OCR text matches a URL pattern.")
+    has_price: bool = Field(False, description="OCR text matches a price/discount pattern.")
+    has_phone: bool = Field(False, description="OCR text matches a phone-number pattern.")
+    has_cta: bool = Field(False, description="OCR text matches a CTA phrase (e.g. 'shop now').")
+    has_brand_lockup: bool = Field(False, description="OCR text matches a known brand-lockup pattern (e.g. trademark symbol present).")
 
 
 class VisualFeatures(BaseModel):
