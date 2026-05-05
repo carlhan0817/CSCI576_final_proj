@@ -104,6 +104,45 @@ def build_per_second_grid(
     for lbl, arr in clip_per_label.items():
         grid[f"clip_{lbl}"] = arr
 
+    # ── Visual: pooled CLIP embedding + per-second style drift ────────────────
+    embed_dim = (
+        len(visual.frames[0].clip_embedding) if visual.frames and visual.frames[0].clip_embedding else 0
+    )
+    if embed_dim > 0:
+        embeddings = np.zeros((T, embed_dim), dtype=np.float32)
+        for f in visual.frames:
+            t = int(f.timestamp_sec)
+            if t >= T or not f.clip_embedding:
+                continue
+            embeddings[t] = np.array(f.clip_embedding, dtype=np.float32)
+        from backend.pipeline.fusion.style_drift import compute_drift
+        grid["style_drift"] = compute_drift(embeddings, window_sec=15)
+    else:
+        grid["style_drift"] = np.zeros(T, dtype=np.float32)
+
+    # ── Visual: OCR commercial signals ───────────────────────────────────────
+    has_url = np.zeros(T, dtype=np.int8)
+    has_price = np.zeros(T, dtype=np.int8)
+    has_phone = np.zeros(T, dtype=np.int8)
+    has_cta = np.zeros(T, dtype=np.int8)
+    has_brand_lockup = np.zeros(T, dtype=np.int8)
+
+    for f in visual.frames:
+        t = int(f.timestamp_sec)
+        if t >= T:
+            continue
+        has_url[t] = int(f.has_url)
+        has_price[t] = int(f.has_price)
+        has_phone[t] = int(f.has_phone)
+        has_cta[t] = int(f.has_cta)
+        has_brand_lockup[t] = int(f.has_brand_lockup)
+
+    grid["has_url"] = has_url
+    grid["has_price"] = has_price
+    grid["has_phone"] = has_phone
+    grid["has_cta"] = has_cta
+    grid["has_brand_lockup"] = has_brand_lockup
+
     # --- Text: sentence-level → per-second tags
     text_sim = np.full(T, np.nan, dtype=np.float32)
     has_text = np.zeros(T, dtype=np.int8)

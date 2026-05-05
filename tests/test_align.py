@@ -184,3 +184,39 @@ class TestLoadPhase2Features:
         assert len(visual.frames) == 2
         assert len(audio.segments) == 2
         assert text.segments == []
+
+
+def test_grid_includes_clip_embedding_drift_and_ocr_flags():
+    # 60s host + 60s ad — long enough that the 15s drift window has interior
+    # positions whose context is purely one class (drift ≈ 0) and boundary
+    # positions whose context is mixed (drift > 0).
+    T = 120
+    visual = VisualFeatures(frames=[
+        VisualFrameFeature(
+            frame_index=t, timestamp_sec=float(t),
+            clip_embedding=[1.0] + [0.0] * 511 if t < 60 else [0.0, 1.0] + [0.0] * 510,
+            has_url=(t == 70),
+            has_price=False, has_phone=False, has_cta=False, has_brand_lockup=False,
+        )
+        for t in range(T)
+    ])
+    audio = AudioFeatures(segments=[
+        AudioFeatureSegment(start=float(t), end=float(t + 1)) for t in range(T)
+    ])
+    text = TextFeatures(segments=[])
+
+    grid = build_per_second_grid(visual, audio, text, duration_sec=float(T))
+
+    assert "style_drift" in grid
+    assert grid["style_drift"].shape == (T,)
+    # Boundary at t=60 should produce strong drift; deep interior of host (t=20)
+    # has uniform context → near-zero drift.
+    assert grid["style_drift"][60] > grid["style_drift"][20] + 0.1
+
+    assert "has_url" in grid
+    assert grid["has_url"][70] == 1
+    assert grid["has_url"][0] == 0
+
+    for k in ("has_price", "has_phone", "has_cta", "has_brand_lockup"):
+        assert k in grid
+        assert grid[k].shape == (T,)
