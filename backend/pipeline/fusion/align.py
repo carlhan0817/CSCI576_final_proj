@@ -163,18 +163,22 @@ def build_per_second_grid(
     text_sim = np.full(T, np.nan, dtype=np.float32)
     has_text = np.zeros(T, dtype=np.int8)
     text_sentence_id = np.full(T, -1, dtype=np.int32)
-    
+    text_has_cta = np.zeros(T, dtype=np.int8)
+
     for seg in text.segments:
         s = max(0, int(np.floor(seg.start)))
         e = min(T, int(np.ceil(seg.end)))
+        if any(kw.startswith("cta:") for kw in seg.matched_keywords):
+            text_has_cta[s:e] = 1
         for t in range(s, e):
             has_text[t] = 1
             text_sentence_id[t] = seg.id
             if seg.similarity_to_next is not None:
                 text_sim[t] = seg.similarity_to_next
-    
+
     grid["text_sim_to_next"] = text_sim
     grid["has_text"] = has_text
     grid["text_sentence_id"] = text_sentence_id
+    grid["text_has_cta"] = text_has_cta
 
     return grid

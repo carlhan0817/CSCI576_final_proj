@@ -39,14 +39,9 @@ _PHONE_PATTERNS = [
     re.compile(r"\b1[-. ]?(?:800|888|877|866|855|844|833|822)[-. ]?[A-Z]{4,}\b"),
 ]
 
-# CTA phrases — chosen to NOT collide with lecture/news/animation phrasing.
-# "subscribe" alone deliberately omitted (YouTube self-promo, not ad-specific).
-_CTA_PHRASES = [
-    "shop now", "buy now", "order now", "order today", "available at",
-    "available now", "limited time", "for a limited time", "offer ends",
-    "introducing the", "new from", "use promo code", "use code",
-    "download the app", "visit our store", "in stores now", "in stores today",
-]
+# CTA phrases — centralized in fusion.rules.CTA_KEYWORDS so OCR and transcript
+# matching share the same list (DRY). "subscribe" is intentionally omitted there.
+from backend.pipeline.fusion.rules import CTA_KEYWORDS as _CTA_PHRASES
 
 # Brand lockup: trademark/registered glyphs. Cheap and high-precision.
 _LOCKUP_PATTERNS = [

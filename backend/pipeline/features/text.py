@@ -19,6 +19,7 @@ from backend.pipeline.fusion.rules import (
     OUTRO_KEYWORDS,
     SELF_PROMO_KEYWORDS,
     RECAP_KEYWORDS,
+    CTA_KEYWORDS,
 )
 
 DEFAULT_SIMILARITY_THRESHOLD = 0.35
@@ -29,6 +30,7 @@ _KEYWORD_GROUPS = {
     "outro": OUTRO_KEYWORDS,
     "self_promo": SELF_PROMO_KEYWORDS,
     "recap": RECAP_KEYWORDS,
+    "cta": CTA_KEYWORDS,
 }
 
 

@@ -243,3 +243,26 @@ def test_grid_includes_audio_drift():
     assert grid["audio_drift"].shape == (T,)
     # Drift should peak around the regime change at t=60 vs deep interior at t=20.
     assert grid["audio_drift"][60] > grid["audio_drift"][20] + 0.1
+
+
+def test_grid_includes_text_has_cta():
+    text = TextFeatures(segments=[
+        TextFeatureSegment(
+            id=0, start=2.0, end=4.0, text="shop now",
+            matched_keywords=["cta:shop now"],
+        ),
+        TextFeatureSegment(
+            id=1, start=4.0, end=8.0, text="thanks",
+            matched_keywords=[],
+        ),
+    ])
+    audio = AudioFeatures(segments=[AudioFeatureSegment(start=float(t), end=float(t + 1)) for t in range(10)])
+    visual = VisualFeatures(frames=[])
+
+    grid = build_per_second_grid(visual, audio, text, duration_sec=10.0)
+
+    assert "text_has_cta" in grid
+    assert grid["text_has_cta"][2] == 1
+    assert grid["text_has_cta"][3] == 1
+    assert grid["text_has_cta"][5] == 0
+    assert grid["text_has_cta"][0] == 0

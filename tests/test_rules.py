@@ -332,3 +332,16 @@ class TestRuleAdBlock:
         g["audio_drift"] = np.zeros(T, dtype=np.float32)
         hits = rule_ad_block(g)
         assert hits == []
+
+    def test_transcript_cta_alone_can_satisfy_commercial_signal(self):
+        from backend.pipeline.fusion.rules import rule_ad_block
+
+        # 30s of visual drift, no OCR hits at all, but transcript CTA in the middle.
+        T = 200
+        g = self._build_grid(T=T, drift_high=[(50, 80)], ocr_hit_t=None, hard_cuts=[49, 81])
+        g["text_has_cta"] = np.zeros(T, dtype=np.int8)
+        g["text_has_cta"][55:60] = 1
+
+        hits = rule_ad_block(g)
+        assert len(hits) == 1
+        assert hits[0].rule_name == "ad_block"

@@ -46,6 +46,15 @@ RECAP_KEYWORDS = [
     "last time", "previously on", "in the previous video",
     "as we saw before", "to recap",
 ]
+# CTA phrases — high-precision, ad-specific. Used by both OCR (ocr_signals.py)
+# and transcript matching (text.py). "subscribe" deliberately omitted (YouTube
+# self-promo, not a clear ad signal).
+CTA_KEYWORDS = [
+    "shop now", "buy now", "order now", "order today", "available at",
+    "available now", "limited time", "for a limited time", "offer ends",
+    "introducing the", "new from", "use promo code", "use code",
+    "download the app", "visit our store", "in stores now", "in stores today",
+]
 
 
 # Tunable thresholds
@@ -132,8 +141,11 @@ AD_BLOCK_BOUNDED_CONFIDENCE = 0.9    # confidence when also bounded by hard cuts
 
 
 def _has_any_commercial_signal(grid: Dict[str, np.ndarray], s: int, e: int) -> bool:
-    """True iff at least one OCR commercial flag is set anywhere in [s, e)."""
-    for key in ("has_url", "has_price", "has_phone", "has_cta", "has_brand_lockup"):
+    """True iff at least one OCR or transcript commercial flag is set anywhere in [s, e)."""
+    for key in (
+        "has_url", "has_price", "has_phone", "has_cta", "has_brand_lockup",
+        "text_has_cta",
+    ):
         arr = grid.get(key)
         if arr is None:
             continue
