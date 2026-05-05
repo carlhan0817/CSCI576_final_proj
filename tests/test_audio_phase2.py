@@ -88,12 +88,19 @@ class TestComputeSecondFeatures:
         np.random.seed(0)
         chunk = np.random.randn(self.SR).astype(np.float32) * 0.1
         feat = _compute_second_features(chunk, sr=self.SR)
+        # Scalar features must be non-negative (mfcc can legitimately be negative).
         for key, val in feat.items():
+            if key == "mfcc":
+                continue
             assert val >= 0.0, f"Feature {key} is negative: {val}"
 
     def test_empty_chunk_returns_zeros(self):
         feat = _compute_second_features(np.array([], dtype=np.float32), sr=self.SR)
-        assert all(v == 0.0 for v in feat.values())
+        for key, val in feat.items():
+            if key == "mfcc":
+                assert val == [0.0] * 20
+            else:
+                assert val == 0.0, f"Feature {key} is non-zero on empty: {val}"
 
     def test_noise_entropy_higher_than_tone(self):
         t = np.arange(self.SR) / self.SR
@@ -203,3 +210,19 @@ class TestExtractAudioFeatures:
         data = json.loads(out.read_text())
         features = AudioFeatures.model_validate(data)
         assert len(features.segments) == 0
+
+
+@pytest.mark.slow
+def test_audio_features_include_mfcc(phase1_workspace):
+    """Each AudioFeatureSegment should carry a 20-dim MFCC vector."""
+    # phase1_workspace is session-scoped; force re-extraction so we see fresh data.
+    if phase1_workspace.audio_features_path.exists():
+        phase1_workspace.audio_features_path.unlink()
+
+    extract_audio_features(phase1_workspace, device="cpu")
+    data = json.loads(phase1_workspace.audio_features_path.read_text())
+    feats = AudioFeatures.model_validate(data)
+
+    assert len(feats.segments) > 0
+    for s in feats.segments:
+        assert len(s.mfcc) == 20

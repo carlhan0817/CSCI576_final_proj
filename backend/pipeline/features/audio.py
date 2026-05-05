@@ -51,7 +51,7 @@ def _compute_second_features(chunk: np.ndarray, sr: int = 16000) -> dict:
     Returns a dict with keys: rms, centroid, bandwidth, zcr, entropy.
     """
     if len(chunk) == 0:
-        return dict(rms=0.0, centroid=0.0, bandwidth=0.0, zcr=0.0, entropy=0.0)
+        return dict(rms=0.0, centroid=0.0, bandwidth=0.0, zcr=0.0, entropy=0.0, mfcc=[0.0] * 20)
 
     # RMS energy
     rms = float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2)))
@@ -82,7 +82,12 @@ def _compute_second_features(chunk: np.ndarray, sr: int = 16000) -> dict:
     ps = mean_spectrum / mean_spectrum.sum()
     entropy = float(-np.sum(ps * np.log2(ps + 1e-12)))
 
-    return dict(rms=rms, centroid=centroid, bandwidth=bandwidth, zcr=zcr, entropy=entropy)
+    # MFCC: 20 coefficients, mean over the second
+    mfcc_frames = librosa.feature.mfcc(y=chunk, sr=sr, n_mfcc=20)  # (20, n_frames)
+    mfcc_mean = mfcc_frames.mean(axis=1)
+    mfcc = [round(float(x), 4) for x in mfcc_mean.tolist()]
+
+    return dict(rms=rms, centroid=centroid, bandwidth=bandwidth, zcr=zcr, entropy=entropy, mfcc=mfcc)
 
 
 def extract_audio_features(workspace: Workspace, device: str = "cpu") -> Path:
@@ -165,6 +170,7 @@ def extract_audio_features(workspace: Workspace, device: str = "cpu") -> Path:
                 zero_crossing_rate=round(feat["zcr"], 6),
                 spectral_entropy=round(feat["entropy"], 4),
                 audio_class=audio_class,
+                mfcc=feat["mfcc"],
             )
         )
 
