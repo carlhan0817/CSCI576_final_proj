@@ -146,10 +146,14 @@ def extract_audio_features(workspace: Workspace, device: str = "cpu") -> Path:
     log.info("Stage 2 (Audio): Computing per-second spectral features...")
     segments: List[AudioFeatureSegment] = []
 
+    MIN_CHUNK_SAMPLES = sr // 2  # skip partial seconds < 0.5s (codec padding)
     for t in range(T):
         start_sample = t * sr
         end_sample = min((t + 1) * sr, len(y))
         chunk = y[start_sample:end_sample]
+
+        if len(chunk) < MIN_CHUNK_SAMPLES:
+            break
 
         feat = _compute_second_features(chunk, sr=sr)
         audio_class = _classify_audio_class(feat["rms"], feat["zcr"], feat["centroid"])

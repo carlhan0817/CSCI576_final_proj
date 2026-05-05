@@ -12,7 +12,7 @@ Strategy:
 """
 from __future__ import annotations
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 from backend.pipeline.schemas import (
     Segment, SegmentEvidence, TextFeatures, TranscriptSegment,
@@ -159,20 +159,28 @@ def classify_segments(
     boundaries: List[int],
     rule_hits: List[RuleHit],
     transcript_segments: List[TranscriptSegment],
+    hard_cut_set: Optional[Set[int]] = None,
 ) -> List[Segment]:
     """
     Build the list of Segment objects from candidate boundaries + features + rules.
+
+    hard_cut_set: seconds that originated from a visual hard cut in find_boundaries.
+                  When provided, each segment whose left boundary falls in the set gets
+                  has_hard_cut_before=True, which prevents smooth.py from erasing it.
     """
+    if hard_cut_set is None:
+        hard_cut_set = set()
+
     segments: List[Segment] = []
     for i in range(len(boundaries) - 1):
         s = boundaries[i]
         e = boundaries[i + 1]
         if e <= s:
             continue
-        
+
         agg = _aggregate_segment_features(grid, s, e)
         rule_label, rule_conf, triggered_rules = _resolve_rule_label_for_segment(rule_hits, s, e)
-        
+
         if rule_label:
             label = rule_label
             confidence = rule_conf
@@ -188,9 +196,12 @@ def classify_segments(
             visual_score = scores["visual"]
             audio_score = scores["audio"]
             text_score = scores["text"]
-        
+
         summary = _extract_segment_summary(transcript_segments, s, e)
-        
+        # Flag segments whose left boundary came from a hard cut so smooth.py
+        # can preserve the boundary even when the label matches the left neighbor.
+        has_hard_cut = s in hard_cut_set
+
         segments.append(Segment(
             segment_id=i,
             start_sec=float(s),
@@ -205,6 +216,7 @@ def classify_segments(
             ),
             summary=summary,
             user_corrected=False,
+            has_hard_cut_before=has_hard_cut,
         ))
-    
+
     return segments

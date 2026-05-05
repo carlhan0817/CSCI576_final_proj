@@ -31,7 +31,13 @@ from backend.pipeline.fusion.smooth import (
     absorb_short_segments,
     renumber,
     smooth_pipeline,
+    split_oversized_segments,
+    propagate_context,
+    promote_stranded_candidates,
     MIN_SEGMENT_DURATION,
+    MAX_SEG_DURATION,
+    CONTEXT_FILLER_MAX_SEC,
+    PROMOTE_THRESHOLD,
 )
 from backend.pipeline.fusion.export import (
     build_chapters,
@@ -658,3 +664,318 @@ class TestExportMetadata:
         data = json.loads(ws.metadata_path.read_text())
         meta = Metadata.model_validate(data)
         assert meta.video_info.verified_by_human is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Boundary-improvement-plan fixes
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _seg_hc(sid: int, start: float, end: float, label: str,
+            hard_cut: bool = False, confidence: float = 0.8) -> Segment:
+    """Helper that also sets has_hard_cut_before."""
+    return Segment(
+        segment_id=sid, start_sec=start, end_sec=end,
+        label=label, confidence=confidence,
+        evidence=SegmentEvidence(), summary="",
+        has_hard_cut_before=hard_cut,
+    )
+
+
+class TestFix1HardCutBoundaryPreserved:
+    """Fix 1: merge_adjacent_same_label must not merge across a hard-cut boundary."""
+
+    def test_hard_cut_blocks_same_label_merge(self):
+        # Two core_content segments; the right one has has_hard_cut_before=True.
+        segs = [
+            _seg_hc(0, 0, 100, "core_content", hard_cut=False),
+            _seg_hc(1, 100, 200, "core_content", hard_cut=True),
+        ]
+        result = merge_adjacent_same_label(segs)
+        assert len(result) == 2, "Hard-cut boundary must NOT be merged away"
+        assert result[0].end_sec == 100.0
+        assert result[1].start_sec == 100.0
+
+    def test_no_hard_cut_allows_merge(self):
+        segs = [
+            _seg_hc(0, 0, 50, "core_content", hard_cut=False),
+            _seg_hc(1, 50, 100, "core_content", hard_cut=False),
+        ]
+        result = merge_adjacent_same_label(segs)
+        assert len(result) == 1, "Without hard-cut flag, same-label segments must merge"
+        assert result[0].end_sec == 100.0
+
+    def test_different_labels_always_split(self):
+        segs = [
+            _seg_hc(0, 0, 50, "core_content", hard_cut=False),
+            _seg_hc(1, 50, 100, "filler", hard_cut=False),
+        ]
+        result = merge_adjacent_same_label(segs)
+        assert len(result) == 2
+
+    def test_hard_cut_flag_preserved_on_merge(self):
+        # When three segments are involved: A (no cut) + B (no cut, same label as A)
+        # + C (hard cut, different label), after merge A+B the result should not have
+        # hard_cut_before=True (it came from A, which has no cut at its start).
+        segs = [
+            _seg_hc(0, 0, 10, "core_content", hard_cut=False),
+            _seg_hc(1, 10, 20, "core_content", hard_cut=False),
+            _seg_hc(2, 20, 30, "filler", hard_cut=True),
+        ]
+        result = merge_adjacent_same_label(segs)
+        assert len(result) == 2
+        assert result[0].has_hard_cut_before is False
+        assert result[1].has_hard_cut_before is True
+
+    def test_classify_stamps_hard_cut_flag(self):
+        """classify_segments must set has_hard_cut_before when hard_cut_set provided."""
+        T = 20
+        grid = _grid(T, is_hard_cut=np.array([0]*10 + [1] + [0]*9, dtype=np.int8))
+        segs = classify_segments(grid, [0, 10, 20], [], [], hard_cut_set={10})
+        # Segment starting at 10 should be flagged.
+        seg_at_10 = next(s for s in segs if s.start_sec == 10.0)
+        assert seg_at_10.has_hard_cut_before is True
+        # Segment starting at 0 should NOT be flagged.
+        seg_at_0 = next(s for s in segs if s.start_sec == 0.0)
+        assert seg_at_0.has_hard_cut_before is False
+
+
+class TestFix2NaturalBreakCandidates:
+    """Fix 2: export_metadata must persist raw boundaries as natural_break_candidates."""
+
+    def _meta_raw(self) -> MetaRaw:
+        return MetaRaw(
+            filename="test.mp4", duration_sec=100.0, fps=30.0,
+            width=640, height=360,
+            video_codec="h264", audio_codec="aac",
+            has_audio=True, ingested_at="2026-01-01T00:00:00Z",
+        )
+
+    def test_break_candidates_populated(self, tmp_path):
+        from backend.pipeline.schemas import Metadata
+        ws = Workspace.for_video(Path("test.mp4"), root=tmp_path / "ws")
+        ws.ensure()
+        segs = [_seg(0, 0, 100, "core_content")]
+        # Pass raw_boundaries that include internal points.
+        export_metadata(ws, self._meta_raw(), segs, raw_boundaries=[0, 30, 60, 100])
+        data = json.loads(ws.metadata_path.read_text())
+        meta = Metadata.model_validate(data)
+        # 0 and 100 (== T) should be excluded; 30 and 60 should appear.
+        assert 30.0 in meta.natural_break_candidates
+        assert 60.0 in meta.natural_break_candidates
+
+    def test_endpoints_excluded(self, tmp_path):
+        from backend.pipeline.schemas import Metadata
+        ws = Workspace.for_video(Path("test.mp4"), root=tmp_path / "ws")
+        ws.ensure()
+        segs = [_seg(0, 0, 100, "core_content")]
+        export_metadata(ws, self._meta_raw(), segs, raw_boundaries=[0, 50, 100])
+        data = json.loads(ws.metadata_path.read_text())
+        meta = Metadata.model_validate(data)
+        assert 0.0 not in meta.natural_break_candidates
+        assert 100.0 not in meta.natural_break_candidates
+
+    def test_no_raw_boundaries_gives_empty_list(self, tmp_path):
+        from backend.pipeline.schemas import Metadata
+        ws = Workspace.for_video(Path("test.mp4"), root=tmp_path / "ws")
+        ws.ensure()
+        segs = [_seg(0, 0, 100, "core_content")]
+        export_metadata(ws, self._meta_raw(), segs)  # no raw_boundaries arg
+        data = json.loads(ws.metadata_path.read_text())
+        meta = Metadata.model_validate(data)
+        assert meta.natural_break_candidates == []
+
+    def test_candidates_are_sorted(self, tmp_path):
+        from backend.pipeline.schemas import Metadata
+        ws = Workspace.for_video(Path("test.mp4"), root=tmp_path / "ws")
+        ws.ensure()
+        segs = [_seg(0, 0, 100, "core_content")]
+        export_metadata(ws, self._meta_raw(), segs, raw_boundaries=[0, 80, 20, 50, 100])
+        data = json.loads(ws.metadata_path.read_text())
+        meta = Metadata.model_validate(data)
+        cands = meta.natural_break_candidates
+        assert cands == sorted(cands)
+
+
+class TestFix3SplitOversized:
+    """Fix 3: split_oversized_segments must bisect segments longer than MAX_SEG_DURATION."""
+
+    def _long_grid(self, T: int, cut_at: int) -> Dict[str, np.ndarray]:
+        g = _grid(T)
+        g["hist_diff"] = np.zeros(T, dtype=np.float32)
+        g["hist_diff"][cut_at] = 2.0  # strong hard cut at cut_at
+        return g
+
+    def test_long_segment_split_at_hardcut(self):
+        T = int(MAX_SEG_DURATION) + 100
+        cut = T // 2
+        g = self._long_grid(T, cut)
+        segs = [_seg(0, 0.0, float(T), "core_content")]
+        raw_boundaries = [0, cut, T]
+        result = split_oversized_segments(segs, raw_boundaries, g)
+        assert len(result) == 2
+        assert result[0].end_sec == float(cut)
+        assert result[1].start_sec == float(cut)
+
+    def test_short_segment_not_split(self):
+        T = 100
+        g = _grid(T)
+        segs = [_seg(0, 0.0, float(T), "core_content")]
+        raw_boundaries = [0, 50, T]
+        result = split_oversized_segments(segs, raw_boundaries, g)
+        assert len(result) == 1, "Segments ≤ MAX_SEG_DURATION must not be split"
+
+    def test_no_internal_boundaries_leaves_segment_intact(self):
+        T = int(MAX_SEG_DURATION) + 50
+        g = _grid(T)
+        segs = [_seg(0, 0.0, float(T), "core_content")]
+        raw_boundaries = [0, T]  # only endpoints, no internal candidate
+        result = split_oversized_segments(segs, raw_boundaries, g)
+        assert len(result) == 1
+
+    def test_right_half_flagged_as_hard_cut(self):
+        T = int(MAX_SEG_DURATION) + 100
+        cut = 200
+        g = self._long_grid(T, cut)
+        segs = [_seg(0, 0.0, float(T), "core_content")]
+        result = split_oversized_segments(segs, [0, cut, T], g)
+        assert result[1].has_hard_cut_before is True
+
+
+class TestFix4PropagateContext:
+    """Fix 4: short filler surrounded by core_content must be relabeled core_content."""
+
+    def test_short_filler_between_core_relabeled(self):
+        segs = [
+            _seg(0, 0, 100, "core_content"),
+            _seg(1, 100, 115, "filler"),      # 15 s < CONTEXT_FILLER_MAX_SEC=30
+            _seg(2, 115, 300, "core_content"),
+        ]
+        result = propagate_context(segs)
+        assert result[1].label == "core_content"
+
+    def test_long_filler_between_core_not_relabeled(self):
+        segs = [
+            _seg(0, 0, 100, "core_content"),
+            _seg(1, 100, 150, "filler"),      # 50 s > CONTEXT_FILLER_MAX_SEC=30
+            _seg(2, 150, 300, "core_content"),
+        ]
+        result = propagate_context(segs)
+        assert result[1].label == "filler"
+
+    def test_filler_at_edge_not_relabeled(self):
+        # Only one neighbor is core_content.
+        segs = [
+            _seg(0, 0, 10, "filler"),
+            _seg(1, 10, 20, "core_content"),
+        ]
+        result = propagate_context(segs)
+        assert result[0].label == "filler"
+
+    def test_non_filler_not_affected(self):
+        segs = [
+            _seg(0, 0, 100, "core_content"),
+            _seg(1, 100, 110, "sponsorship"),
+            _seg(2, 110, 300, "core_content"),
+        ]
+        result = propagate_context(segs)
+        assert result[1].label == "sponsorship"
+
+    def test_relabeled_confidence_is_average_of_neighbors(self):
+        segs = [
+            _seg(0, 0, 100, "core_content", confidence=0.9),
+            _seg(1, 100, 110, "filler", confidence=0.3),
+            _seg(2, 110, 300, "core_content", confidence=0.7),
+        ]
+        result = propagate_context(segs)
+        assert result[1].confidence == pytest.approx((0.9 + 0.7) / 2, abs=1e-3)
+
+    def test_two_adjacent_fillers_not_individually_eligible(self):
+        # Neither filler is flanked by core_content on BOTH sides, so neither
+        # is eligible for single-pass relabeling. Both stay as filler.
+        segs = [
+            _seg(0, 0, 100, "core_content"),
+            _seg(1, 100, 110, "filler"),
+            _seg(2, 110, 120, "filler"),
+            _seg(3, 120, 300, "core_content"),
+        ]
+        result = propagate_context(segs)
+        assert result[1].label == "filler"
+        assert result[2].label == "filler"
+
+    def test_isolated_filler_flanked_on_both_sides_is_relabeled(self):
+        # Single filler with core_content on both sides → relabeled.
+        segs = [
+            _seg(0, 0, 100, "core_content"),
+            _seg(1, 100, 110, "filler"),
+            _seg(2, 110, 300, "core_content"),
+        ]
+        result = propagate_context(segs)
+        assert result[1].label == "core_content"
+
+
+class TestFix5PromoteStrandedCandidates:
+    """Fix 5: break candidates > PROMOTE_THRESHOLD s from any seg boundary become seg boundaries."""
+
+    def test_stranded_candidate_is_promoted(self):
+        # One long segment; raw boundary at midpoint with no nearby seg boundary.
+        gap = int(PROMOTE_THRESHOLD) + 10  # well above threshold
+        split_at = gap
+        T = gap * 2
+        segs = [_seg(0, 0.0, float(T), "core_content")]
+        raw_boundaries = [0, split_at, T]
+        result = promote_stranded_candidates(segs, raw_boundaries)
+        assert len(result) == 2
+        assert result[0].end_sec == float(split_at)
+        assert result[1].start_sec == float(split_at)
+
+    def test_nearby_candidate_not_promoted(self):
+        # Segment boundary already exists within PROMOTE_THRESHOLD of the candidate.
+        segs = [
+            _seg(0, 0.0, 100.0, "core_content"),
+            _seg(1, 100.0, 300.0, "core_content"),
+        ]
+        # Candidate at 110 — only 10 s from the seg boundary at 100 → no split.
+        result = promote_stranded_candidates(segs, raw_boundaries=[0, 110, 300])
+        assert len(result) == 2
+
+    def test_promoted_segment_inherits_parent_label(self):
+        T = int(PROMOTE_THRESHOLD) * 3
+        split_at = T // 2
+        segs = [_seg(0, 0.0, float(T), "sponsorship")]
+        result = promote_stranded_candidates(segs, [0, split_at, T])
+        assert result[0].label == "sponsorship"
+        assert result[1].label == "sponsorship"
+
+    def test_right_half_has_no_hard_cut_flag(self):
+        T = int(PROMOTE_THRESHOLD) * 3
+        split_at = T // 2
+        segs = [_seg_hc(0, 0.0, float(T), "core_content", hard_cut=True)]
+        result = promote_stranded_candidates(segs, [0, split_at, T])
+        # Left half keeps parent's hard_cut_before; right half gets False (it's a speech split).
+        assert result[1].has_hard_cut_before is False
+
+    def test_empty_raw_boundaries_returns_unchanged(self):
+        segs = [_seg(0, 0.0, 500.0, "core_content")]
+        result = promote_stranded_candidates(segs, [])
+        assert len(result) == 1
+
+    def test_multiple_stranded_candidates_all_promoted(self):
+        # Two stranded candidates, both far from any seg boundary.
+        gap = int(PROMOTE_THRESHOLD) + 5
+        T = gap * 3
+        segs = [_seg(0, 0.0, float(T), "core_content")]
+        result = promote_stranded_candidates(segs, [0, gap, gap * 2, T])
+        assert len(result) == 3
+        assert result[0].end_sec == float(gap)
+        assert result[1].end_sec == float(gap * 2)
+
+    def test_smooth_pipeline_includes_promotion(self):
+        # Integration: smooth_pipeline with raw_boundaries promotes a stranded candidate.
+        gap = int(PROMOTE_THRESHOLD) + 10
+        T = gap * 2
+        segs = [
+            _seg(0, 0.0, float(T), "core_content"),
+        ]
+        result = smooth_pipeline(segs, raw_boundaries=[0, gap, T])
+        boundaries = sorted({s.start_sec for s in result} | {s.end_sec for s in result})
+        assert float(gap) in boundaries

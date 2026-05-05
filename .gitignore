@@ -6,6 +6,7 @@ workspace/
 
 # Input videos (large binary files)
 videos/
+output/
 
 # Python bytecode
 __pycache__/

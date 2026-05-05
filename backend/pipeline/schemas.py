@@ -126,6 +126,11 @@ class Segment(BaseModel):
     evidence: SegmentEvidence
     summary: str = ""
     user_corrected: bool = False
+    has_hard_cut_before: bool = Field(
+        False,
+        description="True when the left boundary of this segment originated from a visual hard cut. "
+                    "Prevents merge_adjacent_same_label from erasing the boundary.",
+    )
 
 
 class Chapter(BaseModel):
@@ -153,3 +158,9 @@ class Metadata(BaseModel):
     segments: List[Segment]
     chapters: List[Chapter]
     skip_suggestions: List[int] = Field(default_factory=list, description="segment_ids that should be skipped")
+    natural_break_candidates: List[float] = Field(
+        default_factory=list,
+        description="All boundary timestamps detected before smoothing (excludes 0 and video end). "
+                    "Includes hard cuts, speech transitions, and topic shifts that were absorbed by "
+                    "same-label merging. Use these as candidate ad insertion points.",
+    )

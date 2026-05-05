@@ -48,19 +48,23 @@ def run_fusion(workspace: Workspace) -> Path:
                  h.rule_name, h.start_sec, h.end_sec, h.label, h.confidence)
 
     # 4. Find boundaries
-    boundaries = find_boundaries(grid)
-    log.info("Boundary candidates: %d", len(boundaries))
+    raw_boundaries = find_boundaries(grid)
+    log.info("Boundary candidates: %d", len(raw_boundaries))
+
+    # Build the hard-cut second set so classify can stamp has_hard_cut_before.
+    T = len(grid["is_speech"])
+    hard_cut_set = {t for t in range(T) if grid["is_hard_cut"][t]}
 
     # 5. Classify segments
-    segments = classify_segments(grid, boundaries, rule_hits, transcript.segments)
+    segments = classify_segments(grid, raw_boundaries, rule_hits, transcript.segments, hard_cut_set)
     log.info("Initial segments: %d", len(segments))
 
-    # 6. Smooth
-    segments = smooth_pipeline(segments)
+    # 6. Smooth (Fix 1 + Fix 3 + Fix 4 all live inside smooth_pipeline)
+    segments = smooth_pipeline(segments, raw_boundaries=raw_boundaries, grid=grid)
     log.info("Smoothed segments: %d", len(segments))
 
-    # 7. Export
-    out_path = export_metadata(workspace, meta_raw, segments)
+    # 7. Export (Fix 2: raw_boundaries → natural_break_candidates in metadata.json)
+    out_path = export_metadata(workspace, meta_raw, segments, raw_boundaries=raw_boundaries)
     log.info("Wrote metadata.json to %s", out_path)
     log.info("Phase 3 done.")
     return out_path
