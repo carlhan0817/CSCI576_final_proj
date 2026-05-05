@@ -10,11 +10,44 @@ import torch
 from backend.pipeline.workspace import Workspace
 from backend.pipeline.schemas import VisualFeatures, VisualFrameFeature
 from backend.pipeline.logging_setup import get_logger
+from backend.pipeline.features.ocr_signals import (
+    extract_text as _ocr_extract_text,
+    detect_commercial_patterns,
+)
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 DEFAULT_CUT_THRESHOLD = 0.6
 BLACK_FRAME_LUMINANCE_MAX = 10.0   # mean brightness below this → black frame
 BLACK_FRAME_VARIANCE_MAX = 50.0    # variance below this → pure-color frame
+
+# OCR is the most expensive per-frame step. We sample every Nth frame and reuse
+# the result on the skipped frames (forward-fill). On-screen text typically
+# persists ≥3 s, so stride 3 has negligible recall impact and triples throughput.
+OCR_STRIDE_SEC = 3
+# Skip OCR on frames whose pixel variance is below this — too uniform to host text.
+OCR_MIN_LUMINANCE_VARIANCE = 100.0
+
+
+def _should_run_ocr(
+    frame_idx: int,
+    stride: int,
+    is_black: bool,
+    lum_var: float,
+) -> bool:
+    """Gating logic for whether to run OCR on a particular frame.
+
+    Returns True only when ALL of:
+      - frame_idx is on a stride boundary
+      - frame is not black
+      - frame variance is high enough to plausibly contain text
+    """
+    if stride > 1 and (frame_idx % stride) != 0:
+        return False
+    if is_black:
+        return False
+    if lum_var < OCR_MIN_LUMINANCE_VARIANCE:
+        return False
+    return True
 
 # ── CLIP scene prompts (10 labels, covering all taxonomy classes) ─────────────
 # Expanded from 4 → 10 to make all taxonomy labels reachable via the CLIP
@@ -169,6 +202,13 @@ def extract_visual_features(
     prev_gray: Optional[np.ndarray] = None
     prev_bgr: Optional[np.ndarray] = None
 
+    # Forward-fill state for OCR results across stride-skipped frames.
+    last_ocr_lines: list[str] = []
+    last_commercial: dict = {
+        "has_url": False, "has_price": False, "has_phone": False,
+        "has_cta": False, "has_brand_lockup": False,
+    }
+
     for frame_path in frame_files:
         frame_idx = int(frame_path.stem.split("_")[1])
         timestamp_sec = float(frame_idx)
@@ -228,6 +268,17 @@ def extract_visual_features(
         clip_results = {label: float(prob) for label, prob in zip(SCENE_LABELS, probs)}
         clip_embedding = [round(float(x), 6) for x in pooled.tolist()]
 
+        # ── OCR + commercial-pattern detection (with stride + luminance gate)
+        if _should_run_ocr(frame_idx, OCR_STRIDE_SEC, is_black, var_lum):
+            try:
+                last_ocr_lines = _ocr_extract_text(img_bgr, device=device)
+            except Exception as e:
+                log.warning("OCR failed on frame %d: %s", frame_idx, e)
+                last_ocr_lines = []
+            last_commercial = detect_commercial_patterns(last_ocr_lines)
+        # else: keep last_ocr_lines / last_commercial as-is (forward-fill)
+        ocr_joined = " ".join(last_ocr_lines)[:500]
+
         # ── Assemble feature record ──────────────────────────────────────────
         frame_features.append(
             VisualFrameFeature(
@@ -243,6 +294,12 @@ def extract_visual_features(
                 motion_intensity=round(motion, 4),
                 chroma_diff=round(chroma_diff, 6),
                 dct_hf_energy=round(dct_energy, 6),
+                ocr_text=ocr_joined,
+                has_url=last_commercial["has_url"],
+                has_price=last_commercial["has_price"],
+                has_phone=last_commercial["has_phone"],
+                has_cta=last_commercial["has_cta"],
+                has_brand_lockup=last_commercial["has_brand_lockup"],
             )
         )
 

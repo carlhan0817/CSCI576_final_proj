@@ -241,3 +241,69 @@ def test_visual_features_include_clip_embedding(phase1_workspace):
         assert len(f.clip_embedding) == 512
         # Pooled embedding should be non-zero (not all defaults).
         assert sum(abs(x) for x in f.clip_embedding) > 0.0
+
+
+class TestShouldRunOcr:
+    """_should_run_ocr decides whether to call OCR on a given frame.
+
+    Logic:
+      - Honour stride: only frames where (frame_idx % stride) == 0 qualify.
+      - Skip if the frame is black or near-uniform (low luminance variance).
+    """
+
+    def test_first_frame_with_normal_content_runs_ocr(self):
+        from backend.pipeline.features.visual import _should_run_ocr
+        assert _should_run_ocr(frame_idx=0, stride=3, is_black=False, lum_var=500.0) is True
+
+    def test_skipped_by_stride(self):
+        from backend.pipeline.features.visual import _should_run_ocr
+        assert _should_run_ocr(frame_idx=1, stride=3, is_black=False, lum_var=500.0) is False
+        assert _should_run_ocr(frame_idx=2, stride=3, is_black=False, lum_var=500.0) is False
+        assert _should_run_ocr(frame_idx=3, stride=3, is_black=False, lum_var=500.0) is True
+
+    def test_black_frame_skipped_even_when_stride_qualifies(self):
+        from backend.pipeline.features.visual import _should_run_ocr
+        assert _should_run_ocr(frame_idx=0, stride=3, is_black=True, lum_var=500.0) is False
+
+    def test_near_uniform_frame_skipped(self):
+        from backend.pipeline.features.visual import _should_run_ocr
+        # Variance below threshold => effectively a flat / near-blank frame
+        assert _should_run_ocr(frame_idx=0, stride=3, is_black=False, lum_var=50.0) is False
+
+    def test_stride_one_means_every_frame(self):
+        from backend.pipeline.features.visual import _should_run_ocr
+        for t in range(5):
+            assert _should_run_ocr(frame_idx=t, stride=1, is_black=False, lum_var=500.0) is True
+
+
+def test_ocr_strides_and_forward_fills(phase1_workspace, monkeypatch):
+    """Patch OCR to a counter; with stride=2 the call count should be ~half the frame count,
+    but every frame still ends up with the OCR result from the most recent OCR'd frame."""
+    import json
+    from backend.pipeline.features import visual as visual_mod
+    from backend.pipeline.schemas import VisualFeatures
+
+    calls = {"n": 0}
+
+    def counting_ocr(img, device="cpu"):
+        calls["n"] += 1
+        return [f"visit shop.com call_{calls['n']}"]
+
+    monkeypatch.setattr(visual_mod, "_ocr_extract_text", counting_ocr)
+    monkeypatch.setattr(visual_mod, "OCR_STRIDE_SEC", 2)
+
+    if phase1_workspace.visual_features_path.exists():
+        phase1_workspace.visual_features_path.unlink()
+    visual_mod.extract_visual_features(phase1_workspace, device="cpu")
+
+    data = json.loads(phase1_workspace.visual_features_path.read_text())
+    feats = VisualFeatures.model_validate(data)
+    n_frames = len(feats.frames)
+
+    # Stride=2 over N frames → OCR runs on stride boundaries → ~half + 1 calls.
+    assert calls["n"] <= (n_frames // 2) + 1
+    assert calls["n"] >= 1
+
+    # Every frame should still be marked has_url because the result was forward-filled.
+    assert all(f.has_url for f in feats.frames)
+    assert all("shop.com" in f.ocr_text for f in feats.frames)
