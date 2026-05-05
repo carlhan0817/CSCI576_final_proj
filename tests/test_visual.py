@@ -219,3 +219,25 @@ class TestExtractVisualFeatures:
         # One fewer frame; no crash
         good_count = len(list(phase1_workspace.frames_dir.glob("frame_*.jpg")))
         assert len(features.frames) == good_count - 1
+
+
+def test_visual_features_include_clip_embedding(phase1_workspace):
+    """Each frame should carry a 512-dim normalised CLIP embedding."""
+    import json
+
+    from backend.pipeline.features.visual import extract_visual_features
+    from backend.pipeline.schemas import VisualFeatures
+
+    # phase1_workspace is session-scoped; force re-extraction so we see fresh data.
+    if phase1_workspace.visual_features_path.exists():
+        phase1_workspace.visual_features_path.unlink()
+
+    extract_visual_features(phase1_workspace, device="cpu")
+    data = json.loads(phase1_workspace.visual_features_path.read_text())
+    feats = VisualFeatures.model_validate(data)
+
+    assert len(feats.frames) > 0
+    for f in feats.frames:
+        assert len(f.clip_embedding) == 512
+        # Pooled embedding should be non-zero (not all defaults).
+        assert sum(abs(x) for x in f.clip_embedding) > 0.0

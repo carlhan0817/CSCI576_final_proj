@@ -205,15 +205,28 @@ def extract_visual_features(
         # ── [V2.1] DCT high-frequency energy ────────────────────────────────
         dct_energy = _compute_dct_hf_energy(gray)
 
-        # ── CLIP zero-shot scene classification ──────────────────────────────
+        # ── CLIP zero-shot scene classification + pooled image embedding ────
         pil_image = Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
-        inputs = processor(
-            text=SCENE_LABELS, images=pil_image, return_tensors="pt", padding=True
+        text_inputs = processor(
+            text=SCENE_LABELS, return_tensors="pt", padding=True
         ).to(device)
+        image_inputs = processor(images=pil_image, return_tensors="pt").to(device)
         with torch.no_grad():
-            outputs = clip_model(**inputs)
-            probs = outputs.logits_per_image.softmax(dim=1)[0].cpu().numpy()
+            image_outputs = clip_model.get_image_features(**image_inputs)
+            text_outputs = clip_model.get_text_features(**text_inputs)
+            # transformers >=5 returns BaseModelOutputWithPooling whose
+            # `pooler_output` is the projected (image|text) embedding tensor;
+            # earlier versions returned the tensor directly.
+            image_features = getattr(image_outputs, "pooler_output", image_outputs)
+            text_features = getattr(text_outputs, "pooler_output", text_outputs)
+            # Normalise then dot-product = cosine similarity.
+            image_norm = image_features / image_features.norm(dim=-1, keepdim=True)
+            text_norm = text_features / text_features.norm(dim=-1, keepdim=True)
+            logits = image_norm @ text_norm.T * clip_model.logit_scale.exp()
+            probs = logits.softmax(dim=1)[0].cpu().numpy()
+            pooled = image_norm[0].cpu().numpy()
         clip_results = {label: float(prob) for label, prob in zip(SCENE_LABELS, probs)}
+        clip_embedding = [round(float(x), 6) for x in pooled.tolist()]
 
         # ── Assemble feature record ──────────────────────────────────────────
         frame_features.append(
@@ -223,6 +236,7 @@ def extract_visual_features(
                 hist_diff_to_previous=round(hist_diff, 6),
                 is_hard_cut=is_cut,
                 clip_labels=clip_results,
+                clip_embedding=clip_embedding,
                 mean_luminance=round(mean_lum, 3),
                 luminance_variance=round(var_lum, 3),
                 is_black_frame=is_black,
