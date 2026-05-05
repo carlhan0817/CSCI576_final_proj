@@ -71,7 +71,7 @@ def _resolve_rule_label_for_segment(
     rule_hits: List[RuleHit],
     start_sec: int,
     end_sec: int,
-    coverage_threshold: float = 0.5,
+    coverage_threshold: float = 0.25,
 ) -> Tuple[str, float, List[str]]:
     """
     Find the strongest rule covering this segment.
@@ -112,7 +112,7 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
         if substring in raw_label:
             mapped_label = target
             break
-    
+
     # Audio modifier: if very little speech, lean toward transition/filler
     speech_ratio = agg.get("is_speech", 0.0)
     if speech_ratio < 0.1 and mapped_label == "core_content":

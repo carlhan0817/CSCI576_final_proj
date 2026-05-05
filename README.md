@@ -79,3 +79,128 @@ Endpoints:
 
 Tests: `pytest tests/test_server.py -v`
 
+# 调参方式
+  一、整体架构（分段是怎么产生的）                                                        
+
+  Phase 2 特征提取 → Phase 3 融合分段                                                                                                          
+    ├─ visual.py    （视觉切点 + CLIP 场景概率）
+    ├─ audio.py     （speech/music/silence 分类）                                                                                              
+    └─ text.py      （文本相似度 + 关键词匹配）
+          ↓
+    ├─ rules.py        硬规则 → 高置信度标签（dead_air / sponsorship / intro / ...）
+    ├─ boundaries.py   候选边界（融合所有"变化"信号）
+    ├─ classify.py     每个 [边界, 边界) 区间分类
+    └─ smooth.py       合并 + 吸收短段
+
+  调段数靠 boundaries.py + smooth.py；调标签靠 rules.py + classify.py；改"什么算 speech / 切点"靠 features/*。
+
+  ---
+  二、按症状对照表
+
+  症状 A：分段被切得太碎（一堆短段）
+
+  ┌──────────────────────┬──────┬─────────────────────────┬──────────────────────────────────────────┐
+  │         参数         │ 默认 │          文件           │                调大或调小                │
+  ├──────────────────────┼──────┼─────────────────────────┼──────────────────────────────────────────┤
+  │ MIN_BOUNDARY_GAP_SEC │ 3    │ fusion/boundaries.py:18 │ ↑ 增大 → 边界互相挤压被丢弃，段更长      │
+  ├──────────────────────┼──────┼─────────────────────────┼──────────────────────────────────────────┤
+  │ MIN_SEGMENT_DURATION │ 2.0  │ fusion/smooth.py:12     │ ↑ 增大 → 短于该阈值的段会被并入邻居      │
+  ├──────────────────────┼──────┼─────────────────────────┼──────────────────────────────────────────┤
+  │ HIST_DIFF_THRESHOLD  │ 0.4  │ fusion/boundaries.py:14 │ ↑ 增大 → 视觉切点更难触发                │
+  ├──────────────────────┼──────┼─────────────────────────┼──────────────────────────────────────────┤
+  │ CLIP_KL_THRESHOLD    │ 0.3  │ fusion/boundaries.py:15 │ ↑ 增大 → CLIP 场景必须变得更剧烈才算边界 │
+  ├──────────────────────┼──────┼─────────────────────────┼──────────────────────────────────────────┤
+  │ TEXT_SIM_THRESHOLD   │ 0.35 │ fusion/boundaries.py:16 │ ↓ 减小 → 文本必须更不相似才算话题切换    │
+  └──────────────────────┴──────┴─────────────────────────┴──────────────────────────────────────────┘
+
+  症状 B：该分的地方没分（段太长／粘连）
+
+  反过来调上面那五个：减小 MIN_BOUNDARY_GAP_SEC / MIN_SEGMENT_DURATION / HIST_DIFF_THRESHOLD / CLIP_KL_THRESHOLD；增大 TEXT_SIM_THRESHOLD。
+
+  症状 C：sponsorship / intro / outro 漏判或误判
+
+  这块完全由关键词表 + 规则窗口驱动：
+
+  ┌───────────────────────────────────────────┬───────────────────────────────────────────┬────────────────────────────────────────────────┐
+  │                   参数                    │                   文件                    │                      说明                      │
+  ├───────────────────────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ SPONSOR_KEYWORDS                          │ fusion/rules.py:27                        │ 加你视频里实际出现的赞助话术（如 "check the    │
+  │                                           │                                           │ description"、品牌名）                         │
+  ├───────────────────────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ INTRO_KEYWORDS / OUTRO_KEYWORDS /         │ fusion/rules.py:32-48                     │ 同上                                           │
+  │ SELF_PROMO_KEYWORDS / RECAP_KEYWORDS      │                                           │                                                │
+  ├───────────────────────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ INTRO_WINDOW_SEC / OUTRO_WINDOW_SEC       │ fusion/rules.py:55-56                     │ 默认 90s，长视频可调到 120-180                 │
+  ├───────────────────────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ sponsor 命中后的 ±15s 扩展                │ fusion/rules.py:105-106                   │ 决定 sponsor 段从关键词出现前后多远开始/结束   │
+  ├───────────────────────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ recap 的 +30s 扩展                        │ fusion/rules.py:128                       │ recap 段比关键词晚结束多少秒                   │
+  ├───────────────────────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ 各规则的 confidence                       │ fusion/rules.py:84,95,107,118,129,142,156 │ 多规则同时命中时，谁 confidence 高谁赢（见下方 │
+  │                                           │                                           │  classify）                                    │
+  └───────────────────────────────────────────┴───────────────────────────────────────────┴────────────────────────────────────────────────┘
+
+  ▎ ⚠️  关键词表是单一真源——features/text.py 从同一份列表里抓 matched_keywords，再被 rules.py 复用（text.py:16-22）。所以你只在 rules.py 
+  ▎ 改一处即可。但改完要删掉旧的 features/text_features.json 重跑 Phase 2，否则缓存里没有新关键词。
+
+  症状 D：同一段内多条规则打架，标错了
+
+  fusion/classify.py:74 里的 coverage_threshold=0.5：规则必须覆盖该段 ≥50% 时间才"算数"。
+  - 调小 → 规则更容易接管标签（更激进）
+  - 调大 → 规则更保守，让 CLIP/音频 fallback 接手
+
+  打架时按规则的 confidence 取最高（classify.py:88）。如果你想让 sponsor 永远压过 intro，改 rules.py 里两者的 confidence 数值。
+
+  症状 E：核心内容被误判成 filler / transition / 反过来
+
+  fusion/classify.py:118-119：
+  if speech_ratio < 0.1 and mapped_label == "core_content":
+      mapped_label = "filler"
+  这是唯一把 core_content 改判 filler 的硬触发。把 0.1 调低（如 0.05）= 更宽容，更多段保留 core_content。
+
+  CLIP → label 的映射表本身在 classify.py:25-39 —— 想新增类别（比如把 "video game" 映射成自定义类别），改这里。
+
+  症状 F：dead_air / holding_screen 误触发
+
+  fusion/rules.py:52-54:
+  DEAD_AIR_MIN_DURATION = 5
+  DEAD_AIR_RMS_THRESHOLD = 0.01
+  HOLDING_SCREEN_MIN_DURATION = 8
+  - rules.py:92 的 hist_diff < 0.05（holding screen 的"画面静止"判定）。
+
+  症状 G：声音类别判错（speech 被当 music 之类）
+
+  features/audio.py:13-15：
+  SILENCE_RMS_THRESHOLD = 0.001
+  SPEECH_ZCR_THRESHOLD = 0.10
+  MUSIC_RMS_THRESHOLD = 0.01
+  判定顺序在 audio.py:29-45（低 RMS→silence；高 ZCR→speech；中等 RMS→music；其余→noise）。
+
+  症状 H：视觉切点过敏 / 不敏感
+
+  features/visual.py:15-17：
+  DEFAULT_CUT_THRESHOLD = 0.6
+  BLACK_FRAME_LUMINANCE_MAX = 10.0
+  BLACK_FRAME_VARIANCE_MAX = 50.0
+  SCENE_LABELS（visual.py:22-37）是 CLIP 用的 10 个 prompt——你也可以直接加新场景类别，但加完要同步更新 classify.py:25 的映射表。
+
+  ---
+  三、改完之后必须做的事（重要）
+
+  Pipeline 有缓存：每一阶段都会检查输出文件是否存在，存在就 skip（如 features/audio.py:105-107）。
+
+  所以改了：
+  - features/* 的参数 → 删 workspace/{video_id}/features/*.json 重跑 Phase 2+3
+  - fusion/* 的参数 → 删 workspace/{video_id}/metadata.json 重跑 Phase 3 即可
+
+  或者用 run_pipeline(..., force=True) 强制全部重跑。
+
+  ---
+  四、推荐的调参顺序
+
+  我的建议是自顶向下：
+  1. 先看 metadata.json 里每段的 evidence.triggered_rules 和 confidence——如果误标段有规则触发，调 rules.py；没有规则触发，调 classify.py 的
+  CLIP 映射或 speech_ratio 阈值。
+  2. 段数对不上？先动 MIN_SEGMENT_DURATION 和 MIN_BOUNDARY_GAP_SEC，这俩最便宜（只要重跑 Phase 3）。
+  3. 上面都不够，再去动 boundaries.py 的四个信号阈值。
+  4. 实在不行，回到 Phase 2 调 audio / visual 阈值（这层改动重跑代价最大）。

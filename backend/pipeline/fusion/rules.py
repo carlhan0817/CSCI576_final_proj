@@ -27,7 +27,7 @@ class RuleHit:
 SPONSOR_KEYWORDS = [
     "sponsored by", "today's video is brought to you by", "brought to you by",
     "thanks to our sponsor", "this video is sponsored", "use code", "promo code",
-    "go to", "check out the link", "the link in the description",
+    "the link in the description",
 ]
 INTRO_KEYWORDS = [
     "welcome back", "welcome to", "in today's video", "in this video",
@@ -54,6 +54,28 @@ DEAD_AIR_RMS_THRESHOLD = 0.01    # RMS below this AND no speech → dead_air
 HOLDING_SCREEN_MIN_DURATION = 8  # seconds of low-motion + silence
 INTRO_WINDOW_SEC = 90            # search "intro" only in first N seconds
 OUTRO_WINDOW_SEC = 90            # search "outro" only in last N seconds
+AD_BREAK_MIN_DURATION = 15       # min seconds of (mostly) no speech to flag as sponsorship
+AD_BREAK_MAX_GAP = 3             # tolerate brief speech bursts up to this many seconds
+
+
+def _close_short_gaps(arr: np.ndarray, max_gap: int) -> np.ndarray:
+    """Morphological closing on a binary array: fill 0-runs of length <= max_gap
+    that are bordered by 1s on both sides. Used to merge nearby quiet stretches
+    across brief speech bursts."""
+    out = arr.copy()
+    n = len(out)
+    i = 0
+    while i < n:
+        if out[i] == 0:
+            j = i
+            while j < n and out[j] == 0:
+                j += 1
+            if (j - i) <= max_gap and i > 0 and j < n and arr[i - 1] == 1 and arr[j] == 1:
+                out[i:j] = 1
+            i = j
+        else:
+            i += 1
+    return out
 
 
 def _find_runs(arr: np.ndarray, min_length: int) -> List[Tuple[int, int]]:
@@ -82,6 +104,21 @@ def rule_dead_air(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     hits = []
     for s, e in _find_runs(silent, DEAD_AIR_MIN_DURATION):
         hits.append(RuleHit(s, e, "dead_air", "dead_air", confidence=0.9))
+    return hits
+
+
+def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+    """Long stretch of no speech (allowing brief bursts) → high-confidence sponsorship.
+
+    Targets ad inserts that don't trip our keyword list because the host's voice
+    is replaced by ad audio (music/VO) without sponsor catchphrases.
+    """
+    is_speech = grid["is_speech"]
+    quiet = (is_speech == 0).astype(np.int8)
+    quiet_closed = _close_short_gaps(quiet, AD_BREAK_MAX_GAP)
+    hits = []
+    for s, e in _find_runs(quiet_closed, AD_BREAK_MIN_DURATION):
+        hits.append(RuleHit(s, e, "sponsorship", "ad_break", confidence=0.85))
     return hits
 
 
@@ -171,4 +208,5 @@ def run_all_rules(
     all_hits.extend(rule_recap_keyword(text_features, T))
     all_hits.extend(rule_intro_window(text_features, grid))
     all_hits.extend(rule_outro_window(text_features, grid))
+    all_hits.extend(rule_ad_break(grid))
     return all_hits

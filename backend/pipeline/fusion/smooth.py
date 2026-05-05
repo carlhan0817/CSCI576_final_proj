@@ -10,6 +10,7 @@ from backend.pipeline.schemas import Segment, SegmentEvidence
 
 
 MIN_SEGMENT_DURATION = 2.0  # seconds
+SPONSORSHIP_BRIDGE_MAX_GAP = 12.0  # max seconds of non-sponsorship between two sponsorship blocks to bridge
 
 
 def _merge_two(a: Segment, b: Segment, new_id: int) -> Segment:
@@ -117,6 +118,61 @@ def absorb_short_segments(segments: List[Segment]) -> List[Segment]:
     return out
 
 
+def bridge_sponsorship_gaps(
+    segments: List[Segment],
+    max_gap_sec: float = SPONSORSHIP_BRIDGE_MAX_GAP,
+) -> List[Segment]:
+    """Fuse [sponsorship, X, sponsorship] when X is non-sponsorship and short.
+
+    Real ad inserts often contain a mid-roll voiceover or stinger that breaks the
+    quiet/music pattern. Without bridging these, ad blocks fragment into 3+ pieces.
+    The middle segment is rewritten as sponsorship (taking the lower of the two
+    flanking confidences) and all three are merged.
+    """
+    if len(segments) < 3:
+        return list(segments)
+
+    out: List[Segment] = []
+    i = 0
+    while i < len(segments):
+        if (
+            i + 2 < len(segments)
+            and segments[i].label == "sponsorship"
+            and segments[i + 2].label == "sponsorship"
+            and segments[i + 1].label != "sponsorship"
+            and (segments[i + 1].end_sec - segments[i + 1].start_sec) <= max_gap_sec
+        ):
+            a, mid, b = segments[i], segments[i + 1], segments[i + 2]
+            bridged_conf = min(a.confidence, b.confidence)
+            triggered = list(set(
+                a.evidence.triggered_rules
+                + mid.evidence.triggered_rules
+                + b.evidence.triggered_rules
+                + ["sponsorship_bridge"]
+            ))
+            merged = Segment(
+                segment_id=a.segment_id,
+                start_sec=a.start_sec,
+                end_sec=b.end_sec,
+                label="sponsorship",
+                confidence=bridged_conf,
+                evidence=SegmentEvidence(
+                    visual_score=max(a.evidence.visual_score, mid.evidence.visual_score, b.evidence.visual_score),
+                    audio_score=max(a.evidence.audio_score, mid.evidence.audio_score, b.evidence.audio_score),
+                    text_score=max(a.evidence.text_score, mid.evidence.text_score, b.evidence.text_score),
+                    triggered_rules=triggered,
+                ),
+                summary=max([a.summary, mid.summary, b.summary], key=len),
+                user_corrected=False,
+            )
+            out.append(merged)
+            i += 3
+        else:
+            out.append(segments[i])
+            i += 1
+    return out
+
+
 def renumber(segments: List[Segment]) -> List[Segment]:
     """Reset segment_id to be 0..N-1 in order."""
     return [
@@ -135,9 +191,15 @@ def renumber(segments: List[Segment]) -> List[Segment]:
 
 
 def smooth_pipeline(segments: List[Segment]) -> List[Segment]:
-    """Run merge → absorb → merge again → renumber."""
+    """Run merge → absorb → merge → bridge sponsorship gaps → merge again → renumber."""
     s = merge_adjacent_same_label(segments)
     s = absorb_short_segments(s)
     s = merge_adjacent_same_label(s)
+    # Bridge can iterate: collapsing one gap may reveal another to collapse.
+    while True:
+        bridged = bridge_sponsorship_gaps(s)
+        if len(bridged) == len(s):
+            break
+        s = merge_adjacent_same_label(bridged)
     s = renumber(s)
     return s
