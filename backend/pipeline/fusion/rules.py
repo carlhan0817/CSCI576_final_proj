@@ -67,12 +67,17 @@ AD_BREAK_MIN_DURATION = 15       # min seconds of (mostly) no speech to flag as 
 AD_BREAK_MAX_GAP = 3             # tolerate brief speech bursts up to this many seconds
 
 # rule_low_energy_audio: lecture audio is recorded close-mic with high RMS
-# (~0.26) and wide spectral bandwidth (~2000Hz). Inserted ads (rap, song,
-# voiceover) come from remote / mixed sources with lower RMS and narrower
-# bandwidth. On test_004 this cleanly separates Ad1 (rap) and Ad3 (song)
-# from every lecture segment without false positives.
-LOW_ENERGY_RMS_MAX = 0.18
-LOW_ENERGY_BW_MAX = 1900.0
+# and wide spectral bandwidth. Inserted ads (rap, song, voiceover) come from
+# remote / mixed sources with lower RMS and narrower bandwidth.
+#
+# Z-4 fix (2026-05-06): the previous fixed thresholds (0.18 / 1900 Hz) were
+# tuned on test_004 and over-fired on test_001/002/003 whose lecture audio
+# itself sits below those values, painting most of the video as sponsorship.
+# We now derive RMS/BW cutoffs as per-video percentiles of the *non-silent*
+# distribution — silence (rms < LOW_ENERGY_RMS_MIN) would otherwise pull
+# both percentiles toward zero and disable the rule entirely.
+LOW_ENERGY_RMS_PERCENTILE = 15
+LOW_ENERGY_BW_PERCENTILE = 15
 LOW_ENERGY_RMS_MIN = 0.005       # exclude true dead_air (handled by rule_dead_air)
 LOW_ENERGY_MIN_DURATION = 10
 LOW_ENERGY_MAX_GAP = 3
@@ -133,15 +138,27 @@ def rule_low_energy_audio(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     Targets ad inserts that VAD classifies as speech (rap, song with vocals)
     so rule_ad_break misses them. Distinguishes from dead_air by requiring
     RMS above LOW_ENERGY_RMS_MIN.
+
+    Z-4 (2026-05-06): RMS and BW cutoffs are now per-video percentiles of the
+    *non-silent* distribution. Computing the percentile across the full track
+    including silence (rms < LOW_ENERGY_RMS_MIN) would collapse both
+    percentiles toward zero and the rule would never fire.
     """
     rms = grid.get("rms_energy")
     bw = grid.get("spectral_bandwidth")
     if rms is None or bw is None:
         return []
+
+    active = rms >= LOW_ENERGY_RMS_MIN
+    if not active.any():
+        return []
+    rms_thresh = float(np.percentile(rms[active], LOW_ENERGY_RMS_PERCENTILE))
+    bw_thresh = float(np.percentile(bw[active], LOW_ENERGY_BW_PERCENTILE))
+
     cond = (
-        (rms < LOW_ENERGY_RMS_MAX)
+        (rms < rms_thresh)
         & (rms >= LOW_ENERGY_RMS_MIN)
-        & (bw < LOW_ENERGY_BW_MAX)
+        & (bw < bw_thresh)
     ).astype(np.int8)
     closed = _close_short_gaps(cond, LOW_ENERGY_MAX_GAP)
     hits = []
@@ -166,26 +183,28 @@ def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     return hits
 
 
-# Tunable thresholds for rule_ad_block
-AD_BLOCK_DRIFT_THRESHOLD = 0.30      # cosine-distance threshold to call a second "anomalous"
+# Tunable thresholds for rule_ad_block.
+#
+# Path X rewrite (2026-05-06): the old (style_drift, audio_drift) pair is a
+# *boundary* detector — drift spikes at splice points and decays inside an ad
+# body, so the original "sustained ≥10s OR" gate was mathematically unable to
+# fire. The new (style_block_drift, audio_block_drift) pair uses asymmetric
+# far-only context (and per-dim z-scored MFCC for audio) so drift stays high
+# throughout the ad body. See docs/walkthrough/path-z-deferred.md for context.
 AD_BLOCK_MIN_DURATION = 10           # min length of a sustained-drift run (seconds)
 AD_BLOCK_BOUNDARY_TOLERANCE = 3      # how close a hard cut must be to count as "bounding"
-AD_BLOCK_BASE_CONFIDENCE = 0.7       # confidence when only drift+OCR agree
-AD_BLOCK_BOUNDED_CONFIDENCE = 0.9    # confidence when also bounded by hard cuts
 
+# Block-drift thresholds (empirical: cover both test_001 and test_004 with
+# clean baseline separation; see scripts/diagnose_ad_block.py).
+VISUAL_BLOCK_DRIFT_THRESHOLD = 0.40
+AUDIO_BLOCK_DRIFT_THRESHOLD = 1.25
 
-def _has_any_commercial_signal(grid: Dict[str, np.ndarray], s: int, e: int) -> bool:
-    """True iff at least one OCR or transcript commercial flag is set anywhere in [s, e)."""
-    for key in (
-        "has_url", "has_price", "has_phone", "has_cta", "has_brand_lockup",
-        "text_has_cta",
-    ):
-        arr = grid.get(key)
-        if arr is None:
-            continue
-        if arr[s:e].any():
-            return True
-    return False
+# Asymmetric trust: audio z-score is the trusted primary signal; visual alone
+# requires hard-cut boundaries on both sides because lecture-style content can
+# generate sustained visual drift without being an ad (test_001 baseline).
+AD_BLOCK_AUDIO_CONFIDENCE = 0.80           # audio run alone (above holding_screen 0.70)
+AD_BLOCK_BOTH_CONFIDENCE = 0.90            # audio AND visual runs overlap
+AD_BLOCK_VISUAL_BOUNDED_CONFIDENCE = 0.60  # visual run alone, both ends cut
 
 
 def _has_bounding_cut(grid: Dict[str, np.ndarray], t: int, tolerance: int) -> bool:
@@ -197,35 +216,65 @@ def _has_bounding_cut(grid: Dict[str, np.ndarray], t: int, tolerance: int) -> bo
     return bool(cuts[lo:hi].any())
 
 
-def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """Multi-signal ad detector.
+def _runs_overlap(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+    return not (a[1] <= b[0] or a[0] >= b[1])
 
-    Fires when ALL of the following hold over a contiguous run of length ≥ AD_BLOCK_MIN_DURATION:
-      1. EITHER style_drift[t] OR audio_drift[t] >= AD_BLOCK_DRIFT_THRESHOLD (visual or acoustic discontinuity).
-      2. At least one commercial signal (URL / price / phone / OCR-CTA / brand-lockup / transcript-CTA) within the run.
-    Confidence boosts to AD_BLOCK_BOUNDED_CONFIDENCE when both run boundaries are within
-    AD_BLOCK_BOUNDARY_TOLERANCE of a hard cut; otherwise AD_BLOCK_BASE_CONFIDENCE.
+
+def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+    """Multi-signal ad detector using block-drift signals (Path X).
+
+    Asymmetric-trust design:
+      - audio_block_drift fires standalone — z-scored MFCC over an asymmetric
+        ±30/±90s context cleanly separates inserted ads from lecture content
+        in our corpus.
+      - style_block_drift fires standalone only when bounded by hard cuts on
+        BOTH ends. Lecture videos with frequent slide cuts can sustain visual
+        drift without being ads (test_001 baseline), so visual alone needs
+        corroboration.
+
+    Confidence:
+      - audio AND visual runs overlap            : 0.90
+      - audio run alone                          : 0.80   (above holding_screen)
+      - visual run alone, both ends bounded by   : 0.60   (loses to holding_screen
+        a hard cut                                          until the argmax fix)
     """
-    visual_drift = grid.get("style_drift")
-    audio_drift = grid.get("audio_drift")
-    if visual_drift is None and audio_drift is None:
+    audio_drift = grid.get("audio_block_drift")
+    visual_drift = grid.get("style_block_drift")
+    if audio_drift is None and visual_drift is None:
         return []
 
-    T = len(visual_drift) if visual_drift is not None else len(audio_drift)
-    v = visual_drift if visual_drift is not None else np.zeros(T, dtype=np.float32)
+    T = len(audio_drift if audio_drift is not None else visual_drift)
     a = audio_drift if audio_drift is not None else np.zeros(T, dtype=np.float32)
+    v = visual_drift if visual_drift is not None else np.zeros(T, dtype=np.float32)
 
-    hot = ((v >= AD_BLOCK_DRIFT_THRESHOLD) | (a >= AD_BLOCK_DRIFT_THRESHOLD)).astype(np.int8)
-    hits: List[RuleHit] = []
-    for s, e in _find_runs(hot, AD_BLOCK_MIN_DURATION):
-        if not _has_any_commercial_signal(grid, s, e):
-            continue
-        bounded = (
-            _has_bounding_cut(grid, s, AD_BLOCK_BOUNDARY_TOLERANCE)
-            and _has_bounding_cut(grid, e, AD_BLOCK_BOUNDARY_TOLERANCE)
+    audio_runs = _find_runs(
+        (a >= AUDIO_BLOCK_DRIFT_THRESHOLD).astype(np.int8),
+        AD_BLOCK_MIN_DURATION,
+    )
+    visual_runs_bounded = [
+        (s, e) for (s, e) in _find_runs(
+            (v >= VISUAL_BLOCK_DRIFT_THRESHOLD).astype(np.int8),
+            AD_BLOCK_MIN_DURATION,
         )
-        conf = AD_BLOCK_BOUNDED_CONFIDENCE if bounded else AD_BLOCK_BASE_CONFIDENCE
-        hits.append(RuleHit(s, e, "sponsorship", "ad_block", confidence=conf))
+        if _has_bounding_cut(grid, s, AD_BLOCK_BOUNDARY_TOLERANCE)
+        and _has_bounding_cut(grid, e, AD_BLOCK_BOUNDARY_TOLERANCE)
+    ]
+
+    hits: List[RuleHit] = []
+
+    # Audio runs are trusted standalone; promote to BOTH confidence when a
+    # bounded visual run agrees.
+    for run in audio_runs:
+        has_visual_support = any(_runs_overlap(run, vr) for vr in visual_runs_bounded)
+        conf = AD_BLOCK_BOTH_CONFIDENCE if has_visual_support else AD_BLOCK_AUDIO_CONFIDENCE
+        hits.append(RuleHit(run[0], run[1], "sponsorship", "ad_block", confidence=conf))
+
+    # Visual-only path: bounded run with no audio overlap.
+    for vrun in visual_runs_bounded:
+        if any(_runs_overlap(vrun, ar) for ar in audio_runs):
+            continue
+        hits.append(RuleHit(vrun[0], vrun[1], "sponsorship", "ad_block",
+                            confidence=AD_BLOCK_VISUAL_BOUNDED_CONFIDENCE))
 
     return hits
 

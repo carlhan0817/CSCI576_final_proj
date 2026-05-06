@@ -91,10 +91,19 @@ def build_per_second_grid(
             if t >= T or not seg.mfcc:
                 continue
             mfcc_matrix[t] = np.array(seg.mfcc, dtype=np.float32)
-        from backend.pipeline.fusion.style_drift import compute_drift
+        from backend.pipeline.fusion.style_drift import (
+            compute_drift, compute_block_drift, zscore_columns,
+        )
         grid["audio_drift"] = compute_drift(mfcc_matrix, window_sec=15)
+        # Path X: per-dim z-score (so subtle timbre dims aren't drowned out by
+        # the energy coefficient) + asymmetric ±30/±90s context (so an in-ad
+        # second's neighbourhood is dominated by lecture, not by the ad itself).
+        grid["audio_block_drift"] = compute_block_drift(
+            zscore_columns(mfcc_matrix), near_skip=30, far_window=90,
+        )
     else:
         grid["audio_drift"] = np.zeros(T, dtype=np.float32)
+        grid["audio_block_drift"] = np.zeros(T, dtype=np.float32)
 
     # --- Visual: 1 FPS sampling → already per-second
     hist_diff = np.zeros(T, dtype=np.float32)
@@ -131,10 +140,17 @@ def build_per_second_grid(
             if t >= T or not f.clip_embedding:
                 continue
             embeddings[t] = np.array(f.clip_embedding, dtype=np.float32)
-        from backend.pipeline.fusion.style_drift import compute_drift
+        from backend.pipeline.fusion.style_drift import compute_drift, compute_block_drift
         grid["style_drift"] = compute_drift(embeddings, window_sec=15)
+        # Path X: ±20/±60s asymmetric context. CLIP embeddings are already
+        # unit-norm so per-dim z-score would distort their direction; we
+        # rely on the windowing alone for visual.
+        grid["style_block_drift"] = compute_block_drift(
+            embeddings, near_skip=20, far_window=60,
+        )
     else:
         grid["style_drift"] = np.zeros(T, dtype=np.float32)
+        grid["style_block_drift"] = np.zeros(T, dtype=np.float32)
 
     # ── Visual: OCR commercial signals ───────────────────────────────────────
     has_url = np.zeros(T, dtype=np.int8)

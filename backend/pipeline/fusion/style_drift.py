@@ -56,3 +56,66 @@ def compute_drift(embeddings: np.ndarray, window_sec: int = 15) -> np.ndarray:
         drift[t] = float(1.0 - np.dot(normed[t], ctx_mean))
 
     return drift
+
+
+def compute_block_drift(matrix: np.ndarray, near_skip: int, far_window: int) -> np.ndarray:
+    """Asymmetric-context drift for sustained block detection.
+
+    For each second t:
+        drift[t] = 1 - cos(row_t, mean(ctx))
+    where ctx is the rows in [t-far_window, t-near_skip) ∪ (t+near_skip, t+far_window].
+
+    Choosing near_skip larger than half the longest expected block length keeps
+    the context dominated by surrounding "non-block" content, even when t lies
+    mid-block. This makes drift sustained throughout the block, in contrast to
+    `compute_drift` which spikes only at boundaries.
+
+    See docs/walkthrough/path-z-deferred.md for the design rationale and the
+    Path X / Step 2 notes.
+
+    Args:
+        matrix: shape (T, D). Rows need not be pre-normalised.
+        near_skip: half-width of the gap centred on t (seconds).
+        far_window: outer half-width of the context (seconds).
+
+    Returns:
+        drift: shape (T,) float32 array in [0, 2].
+    """
+    if matrix.ndim != 2:
+        raise ValueError(f"matrix must be 2D (T, D); got {matrix.shape}")
+    T = matrix.shape[0]
+    drift = np.zeros(T, dtype=np.float32)
+
+    normed = np.zeros_like(matrix, dtype=np.float32)
+    for t in range(T):
+        normed[t] = _l2_normalise(matrix[t])
+
+    for t in range(T):
+        past_lo = max(0, t - far_window)
+        past_hi = max(0, t - near_skip)
+        fut_lo = min(T, t + near_skip + 1)
+        fut_hi = min(T, t + far_window + 1)
+        chunks = []
+        if past_hi > past_lo:
+            chunks.append(normed[past_lo:past_hi])
+        if fut_hi > fut_lo:
+            chunks.append(normed[fut_lo:fut_hi])
+        if not chunks:
+            drift[t] = 0.0
+            continue
+        ctx = np.concatenate(chunks, axis=0)
+        ctx_mean = _l2_normalise(ctx.mean(axis=0))
+        drift[t] = float(1.0 - np.dot(normed[t], ctx_mean))
+
+    return drift
+
+
+def zscore_columns(matrix: np.ndarray, eps: float = 1e-9) -> np.ndarray:
+    """Per-dim standardisation: each column → mean 0, std 1.
+
+    Required for MFCC: the 0th coefficient (frame energy) dominates raw
+    magnitude and compresses cosine distance against subtler timbre dims.
+    """
+    mean = matrix.mean(axis=0, keepdims=True)
+    std = matrix.std(axis=0, keepdims=True)
+    return ((matrix - mean) / (std + eps)).astype(matrix.dtype, copy=False)
