@@ -122,7 +122,7 @@ def extract_audio_features(workspace: Workspace, device: str = "cpu") -> Path:
 
     if T == 0:
         log.warning("Audio has zero duration. Writing empty feature file.")
-        out_path.write_text(AudioFeatures(segments=[]).model_dump_json(indent=2))
+        out_path.write_text(AudioFeatures(segments=[]).model_dump_json(indent=2), encoding="utf-8")
         return out_path
 
     # ── Run Silero VAD ────────────────────────────────────────────────────────
@@ -175,6 +175,6 @@ def extract_audio_features(workspace: Workspace, device: str = "cpu") -> Path:
         )
 
     result = AudioFeatures(segments=segments)
-    out_path.write_text(result.model_dump_json(indent=2))
+    out_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     log.info("Audio features saved to %s (%d seconds).", out_path.name, len(segments))
     return out_path

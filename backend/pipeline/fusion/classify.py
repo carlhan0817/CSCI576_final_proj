@@ -20,6 +20,13 @@ from backend.pipeline.schemas import (
 from backend.pipeline.fusion.rules import RuleHit
 
 
+# Demote CLIP-derived sponsorship labels when the segment lacks the rapid
+# scene-cut pattern that real ad inserts exhibit. Lecture slides whose visuals
+# CLIP confuses with "advertisement slide" tend to sit at <0.15 cuts/sec; real
+# ad blocks measure >0.3 cuts/sec on test_004.
+CLIP_SPONSORSHIP_MIN_CUT_DENSITY = 0.25  # cuts per second over the segment
+
+
 # Map CLIP scene label substrings → SegmentLabels (covers all 10 V2.1 prompts).
 # Substring matching against the raw label string (SCENE_LABELS in visual.py).
 CLIP_LABEL_TO_SEGMENT: Dict[str, str] = {
@@ -117,6 +124,16 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
     speech_ratio = agg.get("is_speech", 0.0)
     if speech_ratio < 0.1 and mapped_label == "core_content":
         mapped_label = "filler"
+
+    # CLIP zero-shot regularly mislabels static lecture slides as
+    # "advertisement slide". Real ads have rapid scene cuts; demote sponsorship
+    # candidates whose cut density is below CLIP_SPONSORSHIP_MIN_CUT_DENSITY.
+    # Density excludes the cut at the segment boundary itself (that cut is what
+    # produced the boundary; counting it overstates density on short segments).
+    if mapped_label == "sponsorship":
+        cut_density = agg.get("is_hard_cut_inner", agg.get("is_hard_cut", 0.0))
+        if cut_density < CLIP_SPONSORSHIP_MIN_CUT_DENSITY:
+            mapped_label = "core_content"
     
     visual_score = best_clip_prob
     audio_score = speech_ratio  # higher speech = more likely "real" content
@@ -171,6 +188,14 @@ def classify_segments(
             continue
         
         agg = _aggregate_segment_features(grid, s, e)
+        # Cut density excluding the cut at the segment boundary itself.
+        # The boundary cut signals "scene changed here", not "ad-paced editing".
+        cut_arr = grid.get("is_hard_cut")
+        if cut_arr is not None and e - s > 1:
+            inner = cut_arr[s + 1:e]
+            agg["is_hard_cut_inner"] = float(inner.sum()) / max(1, len(inner))
+        else:
+            agg["is_hard_cut_inner"] = 0.0
         rule_label, rule_conf, triggered_rules = _resolve_rule_label_for_segment(rule_hits, s, e)
         
         if rule_label:

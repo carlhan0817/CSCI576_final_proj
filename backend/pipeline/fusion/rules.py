@@ -66,6 +66,17 @@ OUTRO_WINDOW_SEC = 90            # search "outro" only in last N seconds
 AD_BREAK_MIN_DURATION = 15       # min seconds of (mostly) no speech to flag as sponsorship
 AD_BREAK_MAX_GAP = 3             # tolerate brief speech bursts up to this many seconds
 
+# rule_low_energy_audio: lecture audio is recorded close-mic with high RMS
+# (~0.26) and wide spectral bandwidth (~2000Hz). Inserted ads (rap, song,
+# voiceover) come from remote / mixed sources with lower RMS and narrower
+# bandwidth. On test_004 this cleanly separates Ad1 (rap) and Ad3 (song)
+# from every lecture segment without false positives.
+LOW_ENERGY_RMS_MAX = 0.18
+LOW_ENERGY_BW_MAX = 1900.0
+LOW_ENERGY_RMS_MIN = 0.005       # exclude true dead_air (handled by rule_dead_air)
+LOW_ENERGY_MIN_DURATION = 10
+LOW_ENERGY_MAX_GAP = 3
+
 
 def _close_short_gaps(arr: np.ndarray, max_gap: int) -> np.ndarray:
     """Morphological closing on a binary array: fill 0-runs of length <= max_gap
@@ -113,6 +124,29 @@ def rule_dead_air(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     hits = []
     for s, e in _find_runs(silent, DEAD_AIR_MIN_DURATION):
         hits.append(RuleHit(s, e, "dead_air", "dead_air", confidence=0.9))
+    return hits
+
+
+def rule_low_energy_audio(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+    """Sustained low-RMS + narrow-bandwidth audio → likely inserted ad.
+
+    Targets ad inserts that VAD classifies as speech (rap, song with vocals)
+    so rule_ad_break misses them. Distinguishes from dead_air by requiring
+    RMS above LOW_ENERGY_RMS_MIN.
+    """
+    rms = grid.get("rms_energy")
+    bw = grid.get("spectral_bandwidth")
+    if rms is None or bw is None:
+        return []
+    cond = (
+        (rms < LOW_ENERGY_RMS_MAX)
+        & (rms >= LOW_ENERGY_RMS_MIN)
+        & (bw < LOW_ENERGY_BW_MAX)
+    ).astype(np.int8)
+    closed = _close_short_gaps(cond, LOW_ENERGY_MAX_GAP)
+    hits = []
+    for s, e in _find_runs(closed, LOW_ENERGY_MIN_DURATION):
+        hits.append(RuleHit(s, e, "sponsorship", "low_energy_audio", confidence=0.75))
     return hits
 
 
@@ -284,4 +318,5 @@ def run_all_rules(
     all_hits.extend(rule_outro_window(text_features, grid))
     all_hits.extend(rule_ad_block(grid))
     all_hits.extend(rule_ad_break(grid))
+    all_hits.extend(rule_low_energy_audio(grid))
     return all_hits

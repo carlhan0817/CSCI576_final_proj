@@ -156,7 +156,7 @@ def _load_transcript(workspace: Workspace) -> List[TranscriptSegment]:
     if not path.exists():
         log.warning("Transcript missing at %s; segment summaries will be empty.", path)
         return []
-    transcript = Transcript.model_validate(json.loads(path.read_text()))
+    transcript = Transcript.model_validate(json.loads(path.read_text(encoding="utf-8")))
     return list(transcript.segments)
 
 
@@ -343,7 +343,7 @@ def export_metadata(
     )
 
     out_path = workspace.metadata_path
-    out_path.write_text(metadata.model_dump_json(indent=2))
+    out_path.write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
     log.info(
         "Wrote metadata.json to %s (segments=%d, chapters=%d, skips=%d, version=%s)",
         out_path,

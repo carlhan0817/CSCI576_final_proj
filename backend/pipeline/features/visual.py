@@ -313,6 +313,6 @@ def extract_visual_features(
         torch.cuda.empty_cache()
 
     result = VisualFeatures(frames=frame_features)
-    out_path.write_text(result.model_dump_json(indent=2))
+    out_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     log.info("Visual features saved to %s (%d frames).", out_path.name, len(frame_features))
     return out_path

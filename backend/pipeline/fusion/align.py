@@ -21,11 +21,11 @@ from backend.pipeline.workspace import Workspace
 
 def load_phase2_features(workspace: Workspace) -> Tuple[VisualFeatures, AudioFeatures, TextFeatures]:
     """Read the three Phase 2 JSON artifacts."""
-    with open(workspace.visual_features_path) as f:
+    with open(workspace.visual_features_path, encoding="utf-8") as f:
         visual = VisualFeatures.model_validate(json.load(f))
-    with open(workspace.audio_features_path) as f:
+    with open(workspace.audio_features_path, encoding="utf-8") as f:
         audio = AudioFeatures.model_validate(json.load(f))
-    with open(workspace.text_features_path) as f:
+    with open(workspace.text_features_path, encoding="utf-8") as f:
         text = TextFeatures.model_validate(json.load(f))
     return visual, audio, text
 

@@ -51,5 +51,5 @@ def transcribe(
         segments=segments,
         full_text=" ".join(parts),
     )
-    workspace.transcript_path.write_text(transcript.model_dump_json(indent=2))
+    workspace.transcript_path.write_text(transcript.model_dump_json(indent=2), encoding="utf-8")
     return transcript

@@ -80,7 +80,7 @@ def extract_text_features(
     if not transcript.segments:
         log.warning("Transcript is empty. Writing empty text features.")
         empty = TextFeatures(segments=[])
-        out_path.write_text(empty.model_dump_json(indent=2))
+        out_path.write_text(empty.model_dump_json(indent=2), encoding="utf-8")
         np.save(str(embeddings_path), np.empty((0, 384), dtype=np.float32))
         return out_path
 
@@ -122,6 +122,6 @@ def extract_text_features(
         )
 
     result = TextFeatures(segments=text_feature_segments)
-    out_path.write_text(result.model_dump_json(indent=2))
+    out_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     log.info("Text features saved to %s (%d segments).", out_path.name, len(text_feature_segments))
     return out_path

@@ -79,6 +79,57 @@ Endpoints:
 
 Tests: `pytest tests/test_server.py -v`
 
+---
+
+# 本分支 (ocrapproach) 改动总览
+
+聚焦于把 ad detection 从 baseline (P=40%, R=60%, F1=48%) 提升到 P=91%, R=99%, F1=95%。改动分布在 Phase 2 特征 + Phase 3 融合，外加一组跨平台 bug 修复。
+
+## Phase 2 — 新增特征通道
+
+- **OCR + 商业模式检测**（`features/visual.py`, `features/ocr_signals.py`）
+  - rapidocr-onnxruntime 在采样帧上跑 OCR（stride=3s + 黑帧/低方差跳过）
+  - 正则匹配 URL / 价格 / 电话 / CTA / brand-lockup → `has_url`, `has_price`, `has_phone`, `has_cta`, `has_brand_lockup`
+- **CLIP 池化 image embedding**（`features/visual.py`）：除 zero-shot 概率外额外输出 512-d 向量，给 style_drift 用
+- **每秒 MFCC**（`features/audio.py`）：20 维 MFCC 向量，给 audio_drift 用
+
+## Phase 3 — 融合阶段升级
+
+- **`fusion/style_drift.py`**：基于 CLIP embedding 的视觉风格邻域散度
+- **audio_drift**（`fusion/align.py`）：用 MFCC 算同样的音频风格漂移
+- **`rule_ad_block`**（`fusion/rules.py`）：多信号广告检测，要求 `(visual_drift OR audio_drift) ≥ 0.30` 且区段内出现至少一个商业信号；带 hard-cut 边界则置信度 0.9，否则 0.7
+- **`rule_ad_break` 降级**：从原 0.85 降为 0.5 advisory，避免 is_speech-only 单信号产生大量误报
+- **`rule_low_energy_audio`**（新，本 session 加入）：RMS<0.18 + spectral_bandwidth<1900 持续 ≥10s → sponsorship。专门捕获 VAD 误判为 speech 的 rap / song 类广告（test_004 上 Ad1 rap 和 Ad3 song 都靠这条规则命中）
+- **CLIP→sponsorship cut-density gate**（`fusion/classify.py`，本 session 加入）：CLIP fallback 把段标成 sponsorship 时，要求段内 hard_cut 密度 ≥ 0.25/sec（剔除 boundary 处的 cut，避免 boundary 自身被算进密度）。低于阈值降级 core_content。消除 lecture 中静态 slide 被 CLIP 误判为 "advertisement slide" 产生的大块 FP
+
+## 跨平台 Bug 修复（本 session）
+
+- **强制 UTF-8 编码**（`probe.py`, `transcribe.py`, `features/{audio,text,visual}.py`, `fusion/{align,run,export}.py`, `server/routes.py`）：所有 JSON 读写显式 `encoding="utf-8"`。修复中文 locale Windows 上 OCR 输出含 `•` (U+2022) 等字符时 `Path.write_text` 默认走 GBK 编码导致整 pipeline 崩溃的问题
+
+## 在 test_004 (20 min, 3 ads, GT 总长 136s) 上的效果
+
+| 指标 | 改前 | 改后 | Δ |
+|---|---|---|---|
+| Precision | 40.0% | **91.3%** | +51.3pp |
+| Recall | 60.0% | **98.6%** | +38.6pp |
+| F1 | 47.8% | **94.8%** | +47.0pp |
+| 总段数 | 28 | **18** | 更连贯 |
+| Ad1 (rap) 覆盖 | 10% | **100%** | |
+| Ad2 (animation) 覆盖 | 100% | 100% | |
+| Ad3 (song) 覆盖 | 55%（碎成 8 段） | **100%（1 段）** | |
+
+## 仅重跑 Phase 3 的快速循环
+
+修改 `fusion/*.py` 后不需要重跑 30+ 分钟的 Phase 1+2：
+
+```bash
+python -m backend.pipeline.fusion.run videos/<stem>.mp4   # 几秒
+```
+
+`metadata.json` 立刻更新，前端刷新即可看到新结果。
+
+---
+
 # 调参方式
   一、整体架构（分段是怎么产生的）                                                        
 

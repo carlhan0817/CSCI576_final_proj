@@ -45,7 +45,7 @@ def get_metadata(video_id: str, request: Request) -> Metadata:
     if not meta_path.exists():
         raise HTTPException(status_code=404, detail=f"metadata not found for video '{video_id}'")
     try:
-        return Metadata.model_validate_json(meta_path.read_text())
+        return Metadata.model_validate_json(meta_path.read_text(encoding="utf-8"))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"metadata invalid: {exc}")
 
@@ -53,7 +53,7 @@ def get_metadata(video_id: str, request: Request) -> Metadata:
 def _atomic_write_text(path, text: str) -> None:
     """Write to <path>.tmp then os.replace onto <path> — crash-safe."""
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text)
+    tmp.write_text(text, encoding="utf-8")
     os.replace(str(tmp), str(path))
 
 
@@ -204,7 +204,7 @@ def list_videos(request: Request) -> List[VideoSummary]:
         if not meta_path.exists():
             continue
         try:
-            md = Metadata.model_validate_json(meta_path.read_text())
+            md = Metadata.model_validate_json(meta_path.read_text(encoding="utf-8"))
         except ValidationError:
             _log.warning("Skipping %s: metadata failed schema validation", meta_path)
             continue

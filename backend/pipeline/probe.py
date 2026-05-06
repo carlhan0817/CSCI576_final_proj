@@ -28,5 +28,5 @@ def probe_video(mp4_path: Path, workspace: Workspace) -> MetaRaw:
         has_audio=has_audio,
         ingested_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
-    workspace.meta_raw_path.write_text(meta.model_dump_json(indent=2))
+    workspace.meta_raw_path.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
     return meta
