@@ -2,6 +2,7 @@ body { font-family: sans-serif; margin: 12px; }
 h1 { margin: 0 0 8px; font-size: 18px; }
 
 #timeline {
+  position: relative;
   display: flex;
   height: 24px;
   border: 1px solid #888;
@@ -9,6 +10,19 @@ h1 { margin: 0 0 8px; font-size: 18px; }
 }
 #timeline > div { height: 100%; cursor: pointer; }
 #timeline > div:hover { outline: 2px solid #000; }
+
+.ad-slot-marker {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: #ff6b00;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#ad-slots-section { margin-top: 12px; }
+#ad-slots-section h2 { font-size: 15px; margin: 4px 0; }
 
 #controls { margin: 8px 0; }
 #controls > * { margin-right: 8px; }
@@ -21,7 +35,7 @@ th, td { border: 1px solid #ccc; padding: 2px 6px; font-size: 13px; }
 .label-core_content   { background: #2ecc71; }
 .label-intro          { background: #3498db; color: #fff; }
 .label-outro          { background: #9b59b6; color: #fff; }
-.label-sponsorship    { background: #e74c3c; color: #fff; }
+.label-ad             { background: #e74c3c; color: #fff; }
 .label-self_promotion { background: #e67e22; color: #fff; }
 .label-recap          { background: #f1c40f; }
 .label-transition     { background: #95a5a6; }

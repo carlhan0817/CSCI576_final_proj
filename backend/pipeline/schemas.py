@@ -98,7 +98,7 @@ SegmentLabel = Literal[
     "core_content",
     "intro",
     "outro",
-    "sponsorship",
+    "ad",
     "self_promotion",
     "recap",
     "transition",
@@ -133,6 +133,20 @@ class Segment(BaseModel):
     )
 
 
+class AdInsertionCandidate(BaseModel):
+    """A scored recommendation for where to insert an external ad break."""
+    timestamp_sec: float = Field(..., description="Recommended insertion point in seconds")
+    score: float = Field(..., ge=0.0, le=1.0, description="Composite score 0–1")
+    signal_strength: float = Field(..., ge=0.0, le=1.0)
+    transition_score: float = Field(
+        ..., ge=0.0, le=1.0,
+        description="1.0 when the segment label changes at this boundary (genuine chapter break); "
+                    "0.0 when the same label continues (intra-content hard cut).",
+    )
+    left_block_sec: float = Field(..., ge=0.0, description="Content duration before this point")
+    right_block_sec: float = Field(..., ge=0.0, description="Content duration after this point")
+
+
 class Chapter(BaseModel):
     model_config = ConfigDict(extra="forbid")
     chapter_id: int = Field(..., ge=0)
@@ -163,4 +177,9 @@ class Metadata(BaseModel):
         description="All boundary timestamps detected before smoothing (excludes 0 and video end). "
                     "Includes hard cuts, speech transitions, and topic shifts that were absorbed by "
                     "same-label merging. Use these as candidate ad insertion points.",
+    )
+    ad_insertion_candidates: List[AdInsertionCandidate] = Field(
+        default_factory=list,
+        description="Top-N recommended external ad insertion points, scored and ranked by "
+                    "signal strength and content balance on both sides.",
     )

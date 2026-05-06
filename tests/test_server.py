@@ -74,7 +74,7 @@ VALID_METADATA: dict = {
             "segment_id": 1,
             "start_sec": 30.0,
             "end_sec": 60.0,
-            "label": "sponsorship",
+            "label": "ad",
             "confidence": 0.8,
             "evidence": {
                 "visual_score": 0.4,
@@ -177,7 +177,7 @@ def test_get_metadata_happy(client):
     assert body["video_info"]["filename"] == "demo.mp4"
     assert len(body["segments"]) == 2
     assert body["segments"][0]["label"] == "core_content"
-    assert body["segments"][1]["label"] == "sponsorship"
+    assert body["segments"][1]["label"] == "ad"
 
 
 def test_get_metadata_404_when_missing_sad_b(client):

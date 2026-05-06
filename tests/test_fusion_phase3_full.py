@@ -283,21 +283,21 @@ class TestBoundariesSignals:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestResolveRuleLabel:
-    def _hit(self, s, e, label="sponsorship", conf=0.9):
+    def _hit(self, s, e, label="ad", conf=0.9):
         return RuleHit(s, e, label, "test_rule", conf)
 
     def test_full_coverage_returns_rule_label(self):
         label, conf, rules = _resolve_rule_label_for_segment(
             [self._hit(0, 10)], 0, 10
         )
-        assert label == "sponsorship"
+        assert label == "ad"
         assert conf == 0.9
 
     def test_partial_coverage_above_threshold_returns_label(self):
         label, conf, _ = _resolve_rule_label_for_segment(
             [self._hit(0, 8)], 0, 10  # 80% coverage ≥ 50% threshold
         )
-        assert label == "sponsorship"
+        assert label == "ad"
 
     def test_partial_coverage_below_threshold_returns_empty(self):
         label, conf, _ = _resolve_rule_label_for_segment(
@@ -312,9 +312,9 @@ class TestResolveRuleLabel:
         assert rules == []
 
     def test_highest_confidence_wins_when_multiple_rules(self):
-        hits = [self._hit(0, 10, "intro", 0.6), self._hit(0, 10, "sponsorship", 0.9)]
+        hits = [self._hit(0, 10, "intro", 0.6), self._hit(0, 10, "ad", 0.9)]
         label, conf, _ = _resolve_rule_label_for_segment(hits, 0, 10)
-        assert label == "sponsorship"
+        assert label == "ad"
         assert conf == 0.9
 
 
@@ -369,10 +369,10 @@ class TestClassifySegments:
     def test_rule_not_covering_segment_does_not_override(self):
         T = 20
         # Rule covers seconds 15–20 only, segment is 0–10
-        hits = [RuleHit(15, 20, "sponsorship", "test", confidence=0.9)]
+        hits = [RuleHit(15, 20, "ad", "test", confidence=0.9)]
         segs = classify_segments(self._minimal_grid(T), [0, 10, 20], hits, [])
-        # First segment (0-10) should NOT be sponsorship
-        assert segs[0].label != "sponsorship"
+        # First segment (0-10) should NOT be ad
+        assert segs[0].label != "ad"
 
     def test_empty_boundaries_returns_no_segments(self):
         segs = classify_segments(_grid(10), [0, 10], [], [])
@@ -467,7 +467,7 @@ class TestMergeAdjacentSameLabel:
         assert result[0].end_sec == 20
 
     def test_different_labels_not_merged(self):
-        segs = [_seg(0, 0, 10, "core_content"), _seg(1, 10, 20, "sponsorship")]
+        segs = [_seg(0, 0, 10, "core_content"), _seg(1, 10, 20, "ad")]
         result = merge_adjacent_same_label(segs)
         assert len(result) == 2
 
@@ -492,7 +492,7 @@ class TestAbsorbShortSegments:
     def test_short_segment_absorbed_into_neighbor(self):
         segs = [
             _seg(0, 0, 30, "core_content", 0.9),
-            _seg(1, 30, 30 + self._short(), "sponsorship", 0.5),
+            _seg(1, 30, 30 + self._short(), "ad", 0.5),
             _seg(2, 30 + self._short(), 60, "core_content", 0.9),
         ]
         result = absorb_short_segments(segs)
@@ -502,7 +502,7 @@ class TestAbsorbShortSegments:
     def test_long_segment_not_absorbed(self):
         segs = [
             _seg(0, 0, 10, "core_content"),
-            _seg(1, 10, 20, "sponsorship"),
+            _seg(1, 10, 20, "ad"),
             _seg(2, 20, 30, "core_content"),
         ]
         result = absorb_short_segments(segs)
@@ -566,7 +566,7 @@ class TestBuildChapters:
     def test_interrupted_core_content_creates_two_chapters(self):
         segs = [
             _seg(0, 0, 10, "core_content", summary="Part one"),
-            _seg(1, 10, 20, "sponsorship"),
+            _seg(1, 10, 20, "ad"),
             _seg(2, 20, 30, "core_content", summary="Part two"),
         ]
         chapters = build_chapters(segs)
@@ -575,7 +575,7 @@ class TestBuildChapters:
         assert chapters[1].start_sec == 20
 
     def test_no_core_content_returns_empty(self):
-        segs = [_seg(0, 0, 10, "sponsorship"), _seg(1, 10, 20, "outro")]
+        segs = [_seg(0, 0, 10, "ad"), _seg(1, 10, 20, "outro")]
         chapters = build_chapters(segs)
         assert chapters == []
 
@@ -598,7 +598,7 @@ class TestBuildSkipSuggestions:
     def test_non_core_content_ids_returned(self):
         segs = [
             _seg(0, 0, 10, "core_content"),
-            _seg(1, 10, 20, "sponsorship"),
+            _seg(1, 10, 20, "ad"),
             _seg(2, 20, 30, "outro"),
         ]
         skip = build_skip_suggestions(segs)
@@ -638,7 +638,7 @@ class TestExportMetadata:
         from backend.pipeline.schemas import Metadata
         ws = Workspace.for_video(Path("test.mp4"), root=tmp_path / "ws")
         ws.ensure()
-        segs = [_seg(0, 0, 10, "core_content"), _seg(1, 10, 30, "sponsorship")]
+        segs = [_seg(0, 0, 10, "core_content"), _seg(1, 10, 30, "ad")]
         export_metadata(ws, self._meta_raw(), segs)
         data = json.loads(ws.metadata_path.read_text())
         meta = Metadata.model_validate(data)
@@ -649,7 +649,7 @@ class TestExportMetadata:
         from backend.pipeline.schemas import Metadata
         ws = Workspace.for_video(Path("test.mp4"), root=tmp_path / "ws")
         ws.ensure()
-        segs = [_seg(0, 0, 10, "core_content"), _seg(1, 10, 20, "sponsorship")]
+        segs = [_seg(0, 0, 10, "core_content"), _seg(1, 10, 20, "ad")]
         export_metadata(ws, self._meta_raw(), segs)
         data = json.loads(ws.metadata_path.read_text())
         meta = Metadata.model_validate(data)
@@ -874,11 +874,11 @@ class TestFix4PropagateContext:
     def test_non_filler_not_affected(self):
         segs = [
             _seg(0, 0, 100, "core_content"),
-            _seg(1, 100, 110, "sponsorship"),
+            _seg(1, 100, 110, "ad"),
             _seg(2, 110, 300, "core_content"),
         ]
         result = propagate_context(segs)
-        assert result[1].label == "sponsorship"
+        assert result[1].label == "ad"
 
     def test_relabeled_confidence_is_average_of_neighbors(self):
         segs = [
@@ -941,10 +941,10 @@ class TestFix5PromoteStrandedCandidates:
     def test_promoted_segment_inherits_parent_label(self):
         T = int(PROMOTE_THRESHOLD) * 3
         split_at = T // 2
-        segs = [_seg(0, 0.0, float(T), "sponsorship")]
+        segs = [_seg(0, 0.0, float(T), "ad")]
         result = promote_stranded_candidates(segs, [0, split_at, T])
-        assert result[0].label == "sponsorship"
-        assert result[1].label == "sponsorship"
+        assert result[0].label == "ad"
+        assert result[1].label == "ad"
 
     def test_right_half_has_no_hard_cut_flag(self):
         T = int(PROMOTE_THRESHOLD) * 3

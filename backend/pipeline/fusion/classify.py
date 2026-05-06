@@ -34,8 +34,8 @@ CLIP_LABEL_TO_SEGMENT: Dict[str, str] = {
     "end credits":        "outro",
     "title card":         "intro",
     # Sponsor / promo
-    "advertisement":      "sponsorship",
-    "sponsor logo":       "sponsorship",
+    "advertisement":      "ad",
+    "sponsor logo":       "ad",
 }
 
 

@@ -70,8 +70,8 @@ class TestClipLabelMap:
         ("blank screen",       "transition"),
         ("end credits",        "outro"),
         ("title card",         "intro"),
-        ("advertisement",      "sponsorship"),
-        ("sponsor logo",       "sponsorship"),
+        ("advertisement",      "ad"),
+        ("sponsor logo",       "ad"),
     ])
     def test_each_prompt_maps_correctly(self, substring, expected):
         assert CLIP_LABEL_TO_SEGMENT[substring] == expected
@@ -92,11 +92,11 @@ class TestClipLabelMap:
         )
         assert label == "intro"
 
-    def test_advertisement_maps_to_sponsorship(self):
+    def test_advertisement_maps_to_ad(self):
         label, _, _ = _classify_by_clip_and_audio(
             {"clip_advertisement": 0.9, "is_speech": 0.0, "has_text": 0.0}
         )
-        assert label == "sponsorship"
+        assert label == "ad"
 
 
 # ── Fix 2: rule_dead_air requires RMS < threshold AND no speech ───────────────
@@ -215,7 +215,7 @@ class TestKeywordRulesUseMatchedKeywords:
         tf = _make_text_features([seg])
         hits = rule_sponsor_keyword(tf, T=100)
         assert len(hits) == 1
-        assert hits[0].label == "sponsorship"
+        assert hits[0].label == "ad"
 
     def test_sponsor_keyword_ignores_raw_text_if_no_matched_keyword(self):
         # Text contains the phrase but matched_keywords is empty.

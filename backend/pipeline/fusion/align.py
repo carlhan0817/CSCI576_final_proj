@@ -104,6 +104,37 @@ def build_per_second_grid(
     for lbl, arr in clip_per_label.items():
         grid[f"clip_{lbl}"] = arr
 
+    # --- Visual context features for ad-boundary detection
+    # Luminance per second
+    luminance = np.zeros(T, dtype=np.float32)
+    for f in visual.frames:
+        ti = int(f.timestamp_sec)
+        if ti < T:
+            luminance[ti] = f.mean_luminance
+    grid["luminance"] = luminance
+
+    # hc_burst_density[t] = # hard cuts in [t, t+60s) / 60
+    # High density (≥0.10/s) indicates a commercial ad block with many internal edits.
+    _BURST_WIN = 60
+    _hc_cs = np.concatenate([[0], np.cumsum(is_hard_cut.astype(np.int32))])
+    _end_idx = np.minimum(np.arange(T) + _BURST_WIN, T)
+    grid["hc_burst_density"] = (
+        (_hc_cs[_end_idx] - _hc_cs[np.arange(T)]) / _BURST_WIN
+    ).astype(np.float32)
+
+    # lum_context_delta[t] = mean_luminance[t:t+10s] − mean_luminance[t−10s:t]
+    # Large positive value (≥+30) indicates a brightness jump into ad content.
+    _LUM_WIN = 10
+    _lum_cs = np.concatenate([[0], np.cumsum(luminance)])
+    _t = np.arange(T)
+    _post_end = np.minimum(_t + _LUM_WIN, T)
+    _post_n   = np.maximum(_post_end - _t, 1)
+    _pre_start = np.maximum(_t - _LUM_WIN, 0)
+    _pre_n     = np.maximum(_t - _pre_start, 1)
+    _post_mean = (_lum_cs[_post_end] - _lum_cs[_t])       / _post_n
+    _pre_mean  = (_lum_cs[_t]        - _lum_cs[_pre_start]) / _pre_n
+    grid["lum_context_delta"] = (_post_mean - _pre_mean).astype(np.float32)
+
     # --- Text: sentence-level → per-second tags
     text_sim = np.full(T, np.nan, dtype=np.float32)
     has_text = np.zeros(T, dtype=np.int8)

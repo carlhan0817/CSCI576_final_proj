@@ -63,8 +63,9 @@ def run_fusion(workspace: Workspace) -> Path:
     segments = smooth_pipeline(segments, raw_boundaries=raw_boundaries, grid=grid)
     log.info("Smoothed segments: %d", len(segments))
 
-    # 7. Export (Fix 2: raw_boundaries → natural_break_candidates in metadata.json)
-    out_path = export_metadata(workspace, meta_raw, segments, raw_boundaries=raw_boundaries)
+    # 7. Export (Fix 2: raw_boundaries → natural_break_candidates; ad_slots → ad_insertion_candidates)
+    out_path = export_metadata(workspace, meta_raw, segments,
+                               raw_boundaries=raw_boundaries, grid=grid)
     log.info("Wrote metadata.json to %s", out_path)
     log.info("Phase 3 done.")
     return out_path

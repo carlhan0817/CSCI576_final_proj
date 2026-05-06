@@ -97,14 +97,14 @@ def rule_holding_screen(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
 
 
 def rule_sponsor_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
-    """Sentences with sponsor matched_keywords → sponsorship candidates (extends ±15s)."""
+    """Sentences with sponsor matched_keywords → ad candidates (extends ±15s)."""
     hits = []
     for seg in text_features.segments:
         sponsor_matches = [kw for kw in seg.matched_keywords if kw.startswith("sponsor:")]
         if sponsor_matches:
             s = max(0, int(np.floor(seg.start - 15)))
             e = min(T, int(np.ceil(seg.end + 15)))
-            hits.append(RuleHit(s, e, "sponsorship", sponsor_matches[0], confidence=0.85))
+            hits.append(RuleHit(s, e, "ad", sponsor_matches[0], confidence=0.85))
     return hits
 
 

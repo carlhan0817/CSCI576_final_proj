@@ -1,7 +1,7 @@
 "use strict";
 
 const LABELS = [
-  "core_content", "intro", "outro", "sponsorship", "self_promotion",
+  "core_content", "intro", "outro", "ad", "self_promotion",
   "recap", "transition", "dead_air", "holding_screen", "filler",
 ];
 
@@ -48,6 +48,7 @@ async function loadVideo(videoId) {
 
   renderTimeline();
   renderTable();
+  renderAdSlots();
   setStatus(`loaded ${state.metadata.segments.length} segments`);
 }
 
@@ -63,6 +64,43 @@ function renderTimeline() {
     block.title = `[${seg.label}] ${seg.start_sec.toFixed(1)}–${seg.end_sec.toFixed(1)}s`;
     block.addEventListener("click", () => seekTo(seg.start_sec));
     tl.appendChild(block);
+  }
+  // Overlay orange markers for recommended ad insertion slots.
+  const adCandidates = state.metadata.ad_insertion_candidates || [];
+  for (let i = 0; i < adCandidates.length; i++) {
+    const c = adCandidates[i];
+    const marker = document.createElement("div");
+    marker.className = "ad-slot-marker";
+    marker.style.left = (c.timestamp_sec / total * 100) + "%";
+    marker.title = `Ad slot ${i + 1}: ${c.timestamp_sec.toFixed(1)}s  score=${c.score.toFixed(2)}  left=${c.left_block_sec.toFixed(0)}s  right=${c.right_block_sec.toFixed(0)}s`;
+    tl.appendChild(marker);
+  }
+}
+
+function renderAdSlots() {
+  const section = $("ad-slots-section");
+  const candidates = (state.metadata && state.metadata.ad_insertion_candidates) || [];
+  if (!candidates.length) {
+    section.style.display = "none";
+    return;
+  }
+  section.style.display = "";
+  const tbody = section.querySelector("tbody");
+  tbody.innerHTML = "";
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${c.timestamp_sec.toFixed(1)}s</td>
+      <td>${c.score.toFixed(3)}</td>
+      <td>${c.left_block_sec.toFixed(0)}s</td>
+      <td>${c.right_block_sec.toFixed(0)}s</td>
+      <td>${c.signal_strength.toFixed(2)}</td>
+    `;
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", () => seekTo(c.timestamp_sec));
+    tbody.appendChild(tr);
   }
 }
 
