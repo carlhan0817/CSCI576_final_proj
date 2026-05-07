@@ -12,7 +12,7 @@ Strategy:
 """
 from __future__ import annotations
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from backend.pipeline.schemas import (
     Segment, SegmentEvidence, TextFeatures, TranscriptSegment,
@@ -176,17 +176,25 @@ def classify_segments(
     boundaries: List[int],
     rule_hits: List[RuleHit],
     transcript_segments: List[TranscriptSegment],
+    hard_cut_set: Optional[Set[int]] = None,
 ) -> List[Segment]:
     """
     Build the list of Segment objects from candidate boundaries + features + rules.
+
+    hard_cut_set: seconds at which a visual hard cut occurred (Path B / Roger F1).
+    When provided, each segment whose left boundary falls in the set is stamped
+    with has_hard_cut_before=True so smooth.py won't merge across it.
     """
+    if hard_cut_set is None:
+        hard_cut_set = set()
+
     segments: List[Segment] = []
     for i in range(len(boundaries) - 1):
         s = boundaries[i]
         e = boundaries[i + 1]
         if e <= s:
             continue
-        
+
         agg = _aggregate_segment_features(grid, s, e)
         # Cut density excluding the cut at the segment boundary itself.
         # The boundary cut signals "scene changed here", not "ad-paced editing".
@@ -230,6 +238,7 @@ def classify_segments(
             ),
             summary=summary,
             user_corrected=False,
+            has_hard_cut_before=s in hard_cut_set,
         ))
     
     return segments

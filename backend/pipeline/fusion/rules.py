@@ -143,9 +143,17 @@ def rule_low_energy_audio(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     *non-silent* distribution. Computing the percentile across the full track
     including silence (rms < LOW_ENERGY_RMS_MIN) would collapse both
     percentiles toward zero and the rule would never fire.
+
+    Path A (2026-05-06): require at least one second of audio_block_drift
+    crossing AUDIO_BLOCK_DRIFT_THRESHOLD inside the run before firing.
+    Lecture's natural quiet pauses are stylistically continuous with the
+    surrounding lecture (drift low) and should NOT be flagged as
+    sponsorship; inserted ad audio always has at least transient drift
+    against the lecture baseline.
     """
     rms = grid.get("rms_energy")
     bw = grid.get("spectral_bandwidth")
+    audio_drift = grid.get("audio_block_drift")
     if rms is None or bw is None:
         return []
 
@@ -163,6 +171,12 @@ def rule_low_energy_audio(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     closed = _close_short_gaps(cond, LOW_ENERGY_MAX_GAP)
     hits = []
     for s, e in _find_runs(closed, LOW_ENERGY_MIN_DURATION):
+        # Path A: gate on block_drift confirmation. Skip silently when the
+        # signal is unavailable (treat the legacy behaviour as default).
+        if audio_drift is not None:
+            run_drift = audio_drift[s:e]
+            if not (run_drift >= AUDIO_BLOCK_DRIFT_THRESHOLD).any():
+                continue
         hits.append(RuleHit(s, e, "sponsorship", "low_energy_audio", confidence=0.75))
     return hits
 
@@ -173,12 +187,23 @@ def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     Originally a strong signal, demoted because is_speech-only blocks generate
     too many false positives on animation / sports / news content. Use as a
     tiebreaker; rule_ad_block carries the high-confidence detection.
+
+    Path A (2026-05-06): require at least one second of audio_block_drift
+    crossing AUDIO_BLOCK_DRIFT_THRESHOLD inside the run. A lecture's natural
+    long pause is acoustically continuous with the surrounding lecture; an
+    inserted ad break has at least transient drift against the baseline.
+    Diagnostic: 630/791 s of test_003 sponsorship FP came from ad_break alone
+    before this gate.
     """
     is_speech = grid["is_speech"]
+    audio_drift = grid.get("audio_block_drift")
     quiet = (is_speech == 0).astype(np.int8)
     quiet_closed = _close_short_gaps(quiet, AD_BREAK_MAX_GAP)
     hits = []
     for s, e in _find_runs(quiet_closed, AD_BREAK_MIN_DURATION):
+        if audio_drift is not None:
+            if not (audio_drift[s:e] >= AUDIO_BLOCK_DRIFT_THRESHOLD).any():
+                continue
         hits.append(RuleHit(s, e, "sponsorship", "ad_break", confidence=0.5))
     return hits
 

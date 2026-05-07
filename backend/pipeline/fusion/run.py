@@ -48,15 +48,21 @@ def run_fusion(workspace: Workspace) -> Path:
                  h.rule_name, h.start_sec, h.end_sec, h.label, h.confidence)
 
     # 4. Find boundaries
-    boundaries = find_boundaries(grid)
-    log.info("Boundary candidates: %d", len(boundaries))
+    raw_boundaries = find_boundaries(grid)
+    log.info("Boundary candidates: %d", len(raw_boundaries))
+
+    # Build the hard-cut second set so classify can stamp has_hard_cut_before
+    # (Path B / Roger F1 — preserve hard-cut boundaries through smoothing).
+    T = len(grid["is_speech"])
+    hard_cut_set = {t for t in range(T) if grid["is_hard_cut"][t]}
 
     # 5. Classify segments
-    segments = classify_segments(grid, boundaries, rule_hits, transcript.segments)
+    segments = classify_segments(grid, raw_boundaries, rule_hits,
+                                 transcript.segments, hard_cut_set)
     log.info("Initial segments: %d", len(segments))
 
-    # 6. Smooth
-    segments = smooth_pipeline(segments)
+    # 6. Smooth (F1 in merge, F3 split_oversized, F4 propagate_context)
+    segments = smooth_pipeline(segments, raw_boundaries=raw_boundaries, grid=grid)
     log.info("Smoothed segments: %d", len(segments))
 
     # 7. Export

@@ -137,6 +137,12 @@ class Segment(BaseModel):
     evidence: SegmentEvidence
     summary: str = ""
     user_corrected: bool = False
+    has_hard_cut_before: bool = Field(
+        False,
+        description="True when this segment's left boundary originated from a visual hard cut. "
+                    "Prevents merge_adjacent_same_label from erasing the boundary "
+                    "(Path B / Roger F1).",
+    )
 
 
 class Chapter(BaseModel):
