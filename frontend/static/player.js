@@ -200,6 +200,96 @@ async function saveEdits() {
   setStatus("saved ✓ verified_by_human=true");
 }
 
+// ── Upload & process ─────────────────────────────────────────────────────────
+function setUploadStatus(msg, isError = false) {
+  const el = $("upload-status");
+  el.textContent = msg;
+  el.style.color = isError ? "#c0392b" : "#555";
+}
+
+function setProgress(pct, label) {
+  const wrap = $("upload-progress-wrap");
+  const bar  = $("upload-progress-bar");
+  const lbl  = $("upload-progress-label");
+  wrap.style.display = "flex";
+  bar.style.setProperty("--pct", pct + "%");
+  lbl.textContent = `${pct}% — ${label}`;
+}
+
+function hideProgress() {
+  $("upload-progress-wrap").style.display = "none";
+}
+
+let _pollInterval = null;
+
+async function pollUploadStatus(videoId) {
+  try {
+    const r = await fetch(`/api/upload/${videoId}/status`);
+    if (!r.ok) { clearInterval(_pollInterval); setUploadStatus("status check failed", true); return; }
+    const data = await r.json();
+    if (data.status === "done") {
+      clearInterval(_pollInterval);
+      setProgress(100, "Complete");
+      setUploadStatus(`${videoId} processed — refreshing list…`);
+      const picker = $("video-picker");
+      picker.innerHTML = '<option value="">— pick a video —</option>';
+      await loadVideoList();
+      picker.value = videoId;
+      loadVideo(videoId);
+      setTimeout(hideProgress, 3000);
+      $("upload-btn").disabled = false;
+    } else if (data.status === "failed") {
+      clearInterval(_pollInterval);
+      setProgress(data.progress || 0, "Failed");
+      $("upload-progress-bar").style.setProperty("--pct", (data.progress || 0) + "%");
+      $("upload-progress-bar").style.background = "#e74c3c";
+      setUploadStatus(`pipeline failed: ${data.error}`, true);
+      $("upload-btn").disabled = false;
+    } else {
+      setProgress(data.progress || 0, data.message || "Processing…");
+      setUploadStatus(`Processing ${videoId}…`);
+    }
+  } catch (e) {
+    clearInterval(_pollInterval);
+    setUploadStatus("network error during poll", true);
+  }
+}
+
+async function uploadVideo() {
+  const fileInput = $("upload-file");
+  if (!fileInput.files.length) { setUploadStatus("select a .mp4 file first", true); return; }
+  const file = fileInput.files[0];
+  if (!file.name.toLowerCase().endsWith(".mp4")) { setUploadStatus("only .mp4 files accepted", true); return; }
+
+  $("upload-btn").disabled = true;
+  $("upload-progress-bar").style.background = "#2ecc71";  // reset colour from any prior failure
+  setProgress(0, "Uploading…");
+  setUploadStatus(`Uploading ${file.name}…`);
+
+  const form = new FormData();
+  form.append("file", file);
+
+  let data;
+  try {
+    const r = await fetch("/api/upload", { method: "POST", body: form });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.status }));
+      setUploadStatus(`upload failed: ${err.detail}`, true);
+      $("upload-btn").disabled = false;
+      return;
+    }
+    data = await r.json();
+  } catch (e) {
+    setUploadStatus("upload error: " + e, true);
+    $("upload-btn").disabled = false;
+    return;
+  }
+
+  setUploadStatus(`processing ${data.video_id}…`);
+  if (_pollInterval) clearInterval(_pollInterval);
+  _pollInterval = setInterval(() => pollUploadStatus(data.video_id), 3000);
+}
+
 // ── Wire-up ──────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   loadVideoList();
@@ -210,4 +300,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("player").addEventListener("timeupdate", onTimeUpdate);
   $("save-edits").addEventListener("click", saveEdits);
+  $("upload-btn").addEventListener("click", uploadVideo);
 });

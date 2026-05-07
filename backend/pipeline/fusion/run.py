@@ -64,8 +64,10 @@ def run_fusion(workspace: Workspace) -> Path:
     log.info("Smoothed segments: %d", len(segments))
 
     # 7. Export (Fix 2: raw_boundaries → natural_break_candidates; ad_slots → ad_insertion_candidates)
+    # n_ads=4: supports videos with up to 4 inserted ad breaks; MIN_COMPOSITE_SCORE in
+    # ad_slots.py prevents spurious low-confidence candidates from filling the extra slot.
     out_path = export_metadata(workspace, meta_raw, segments,
-                               raw_boundaries=raw_boundaries, grid=grid)
+                               raw_boundaries=raw_boundaries, grid=grid, n_ads=4)
     log.info("Wrote metadata.json to %s", out_path)
     log.info("Phase 3 done.")
     return out_path

@@ -113,11 +113,14 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
             mapped_label = target
             break
     
-    # Audio modifier: if very little speech, lean toward transition/filler
+    # Audio modifier: if very little speech, lean toward transition/filler.
+    # Exception: animation content ("an animated scene") is core content regardless
+    # of speech — action/music scenes have no dialogue but are genuine content.
     speech_ratio = agg.get("is_speech", 0.0)
-    if speech_ratio < 0.1 and mapped_label == "core_content":
+    is_animation_content = "animated" in raw_label
+    if speech_ratio < 0.1 and mapped_label == "core_content" and not is_animation_content:
         mapped_label = "filler"
-    
+
     visual_score = best_clip_prob
     audio_score = speech_ratio  # higher speech = more likely "real" content
     text_score = float(agg.get("has_text", 0.0))

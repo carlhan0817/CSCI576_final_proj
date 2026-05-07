@@ -2,9 +2,10 @@
 from __future__ import annotations
 import logging
 import os
-from typing import List
+import threading
+from typing import Dict, List, Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ValidationError
 
 from backend.pipeline.schemas import Metadata
@@ -14,6 +15,10 @@ from backend.server.config import ServerConfig
 _log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
+
+# In-memory job tracker: video_id → {status, error}
+_jobs: Dict[str, Dict] = {}
+_jobs_lock = threading.Lock()
 
 
 class VideoSummary(BaseModel):
@@ -59,6 +64,66 @@ def save_metadata(video_id: str, body: Metadata, request: Request) -> Metadata:
     meta_path = workspace_dir / "metadata.json"
     _atomic_write_text(meta_path, body.model_dump_json(indent=2))
     return body
+
+
+class UploadStatus(BaseModel):
+    video_id: str
+    status: Literal["processing", "done", "failed"]
+    progress: int = 0       # 0–100
+    message: str = ""
+    error: str = ""
+
+
+def _run_pipeline_bg(video_path, workspace_root, video_id: str) -> None:
+    from backend.pipeline.ingest import run_pipeline
+
+    def _cb(pct: int, msg: str) -> None:
+        with _jobs_lock:
+            _jobs[video_id]["progress"] = pct
+            _jobs[video_id]["message"]  = msg
+
+    try:
+        run_pipeline(video_path, workspace_root=workspace_root, progress_cb=_cb)
+        with _jobs_lock:
+            _jobs[video_id] = {"status": "done", "progress": 100, "message": "Done", "error": ""}
+    except Exception as exc:
+        _log.exception("Pipeline failed for %s", video_id)
+        with _jobs_lock:
+            _jobs[video_id]["status"] = "failed"
+            _jobs[video_id]["error"]  = str(exc)
+
+
+@router.post("/upload", response_model=UploadStatus)
+async def upload_video(file: UploadFile, background_tasks: BackgroundTasks, request: Request) -> UploadStatus:
+    cfg = _config(request)
+
+    if not file.filename or not file.filename.lower().endswith(".mp4"):
+        raise HTTPException(status_code=400, detail="Only .mp4 files are accepted")
+
+    safe_name = os.path.basename(file.filename)
+    video_id  = safe_name[:-4]  # strip .mp4
+    dest      = cfg.videos_root / safe_name
+
+    # Write the uploaded bytes to disk.
+    content = await file.read()
+    dest.write_bytes(content)
+
+    with _jobs_lock:
+        if _jobs.get(video_id, {}).get("status") == "processing":
+            return UploadStatus(video_id=video_id, status="processing")
+        _jobs[video_id] = {"status": "processing", "progress": 0, "message": "Starting…", "error": ""}
+
+    background_tasks.add_task(_run_pipeline_bg, dest, cfg.workspace_root, video_id)
+    return UploadStatus(video_id=video_id, status="processing")
+
+
+@router.get("/upload/{video_id}/status", response_model=UploadStatus)
+def upload_status(video_id: str) -> UploadStatus:
+    with _jobs_lock:
+        job = _jobs.get(video_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No upload job found for '{video_id}'")
+    return UploadStatus(video_id=video_id, **job)
 
 
 @router.get("/videos", response_model=List[VideoSummary])

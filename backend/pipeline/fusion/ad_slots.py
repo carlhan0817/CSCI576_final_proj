@@ -66,6 +66,10 @@ from backend.pipeline.schemas import AdInsertionCandidate, Segment
 MIN_BLOCK_SEC = 90.0          # minimum content duration on each side of a slot
 MIN_AD_SPACING_SEC = 300.0    # minimum gap between any two selected slots
 SPONSOR_EXCLUSION_SEC = 60.0  # penalty radius around in-video ad segments
+# Minimum composite score required for the 4th+ candidate.  The first three slots
+# are always filled (backward-compatible behaviour for 3-ad videos); beyond that,
+# only select if there is strong enough evidence to justify an extra break.
+MIN_COMPOSITE_SCORE_EXTRA = 0.60
 
 W_SIGNAL     = 0.4  # weight for break signal strength
 W_TRANSITION = 0.5  # weight for label-change transition bonus (primary discriminator)
@@ -379,6 +383,21 @@ def score_candidates(
 
     all_candidates = sorted(set(candidates) | high_priority | silence_set)
 
+    # Ad-precursor candidates: any candidate within _AD_PRECURSOR_SEC *before* a
+    # CLIP/rule-detected "ad" segment start.  The fusion segmenter may have placed a
+    # clean boundary just before the ad label begins; that boundary is a perfect splice
+    # point but its transition_bonus is often 0 (same label on both sides until the ad
+    # segment is resolved).  Elevating it to high_priority gives trans=1.0 so it can
+    # compete with burst/corroborated candidates.
+    _AD_PRECURSOR_SEC = 15.0
+    _ad_starts = frozenset(s.start_sec for s in segments if s.label == "ad")
+    ad_precursor_set: set = {
+        t for t in all_candidates
+        if t not in high_priority
+        and any(0 < a_t - t <= _AD_PRECURSOR_SEC for a_t in _ad_starts)
+    }
+    high_priority = high_priority | ad_precursor_set
+
     # Pre-compute per-candidate scores (one pass through grid).
     signal_scores: Dict[float, float] = {}
     trans_scores:  Dict[float, float] = {}
@@ -387,7 +406,8 @@ def score_candidates(
             # Audio silence + visual luminance jump: both modalities confirm → max confidence.
             signal_scores[t] = 1.0
             trans_scores[t]  = 1.0
-        elif t in burst_set:
+        elif t in high_priority:
+            # Burst boundary or ad-precursor: visual/context evidence confirmed → trans=1.0.
             signal_scores[t] = _signal_strength(t, grid) if grid is not None else 0.5
             trans_scores[t]  = 1.0
         else:
@@ -402,7 +422,7 @@ def score_candidates(
     result:   List[AdInsertionCandidate] = []
     remaining = list(all_candidates)
 
-    for _ in range(n_ads):
+    for _round in range(n_ads):
         if not remaining:
             break
 
@@ -437,6 +457,10 @@ def score_candidates(
                 }
 
         if best_t is None:
+            break
+        # For the 4th+ slot, require stronger evidence so weak segment boundaries
+        # don't fill slots when the video has fewer ads than n_ads.
+        if _round >= 3 and best_score < MIN_COMPOSITE_SCORE_EXTRA:
             break
 
         selected.append(best_t)

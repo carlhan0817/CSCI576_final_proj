@@ -24,6 +24,35 @@ h1 { margin: 0 0 8px; font-size: 18px; }
 #ad-slots-section { margin-top: 12px; }
 #ad-slots-section h2 { font-size: 15px; margin: 4px 0; }
 
+#upload-section { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#upload-status { color: #555; font-style: italic; }
+
+#upload-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+#upload-progress-bar {
+  flex: 1;
+  height: 10px;
+  background: #e0e0e0;
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+}
+#upload-progress-bar::after {
+  content: "";
+  display: block;
+  height: 100%;
+  background: #2ecc71;
+  border-radius: 5px;
+  width: var(--pct, 0%);
+  transition: width 0.4s ease;
+}
+#upload-progress-label { font-size: 12px; color: #555; white-space: nowrap; }
+
 #controls { margin: 8px 0; }
 #controls > * { margin-right: 8px; }
 #status { color: #555; font-style: italic; }

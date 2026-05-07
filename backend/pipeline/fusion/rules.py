@@ -86,10 +86,18 @@ def rule_dead_air(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
 
 
 def rule_holding_screen(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """Low visual motion + no speech for a long time → likely holding/title screen."""
+    """Low visual motion + no speech + near-silence → holding/title screen.
+
+    Requires rms_energy < DEAD_AIR_RMS_THRESHOLD so that animation scenes with
+    background music (low hist_diff but audible soundtrack) are not mistaken for
+    holding screens.  A real holding screen has both visual stillness AND audio silence.
+    """
     hist_diff = grid["hist_diff"]
     is_speech = grid["is_speech"]
-    static = ((hist_diff < 0.05) & (is_speech == 0)).astype(np.int8)
+    rms = grid.get("rms_energy", np.zeros(len(is_speech), dtype=np.float32))
+    static = (
+        (hist_diff < 0.05) & (is_speech == 0) & (rms < DEAD_AIR_RMS_THRESHOLD)
+    ).astype(np.int8)
     hits = []
     for s, e in _find_runs(static, HOLDING_SCREEN_MIN_DURATION):
         hits.append(RuleHit(s, e, "holding_screen", "holding_screen", confidence=0.7))
@@ -157,6 +165,67 @@ def rule_outro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) 
     return []
 
 
+# Window sizes for animation-specific rules (wider than keyword-based windows)
+ANIMATION_INTRO_WINDOW_SEC = 120
+ANIMATION_OUTRO_WINDOW_SEC = 120
+_ANIM_INTRO_CLIP_THRESHOLD  = 0.25   # mean CLIP prob over window
+_ANIM_OUTRO_CLIP_THRESHOLD  = 0.20
+_ANIM_INTRO_ANIM_THRESHOLD  = 0.40   # mean "animated scene" prob for theme-song fallback
+_ANIM_INTRO_SPEECH_MAX      = 0.10   # intro must have very little speech
+_ANIM_INTRO_MIN_SEC         = 10     # require at least this many pre-speech seconds
+
+
+def rule_animation_intro(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+    """
+    Detect animation-style intros without speech keywords.
+
+    Two signals are tried, in priority order:
+    1. CLIP 'a title card' probability is high in the first ANIMATION_INTRO_WINDOW_SEC →
+       the video opens with an explicit title-card screen.
+    2. CLIP 'an animated scene' dominates the opening AND speech is nearly absent →
+       the video opens with a theme song / non-dialogue sequence (anime OP, cartoon title).
+
+    Complements rule_intro_window which requires verbal cues ("welcome back", etc.).
+    """
+    T = len(grid["is_speech"])
+    end = min(T, ANIMATION_INTRO_WINDOW_SEC)
+
+    title_card  = grid.get("clip_a title card",       np.zeros(T, dtype=np.float32))
+    animated    = grid.get("clip_an animated scene",  np.zeros(T, dtype=np.float32))
+    is_speech   = grid["is_speech"]
+
+    # Signal 1: title card CLIP
+    if title_card[:end].mean() > _ANIM_INTRO_CLIP_THRESHOLD:
+        return [RuleHit(0, end, "intro", "animation_title_card", confidence=0.75)]
+
+    # Signal 2: animated scene + no speech at the start
+    if animated[:end].mean() > _ANIM_INTRO_ANIM_THRESHOLD and is_speech[:end].mean() < _ANIM_INTRO_SPEECH_MAX:
+        # Find first sustained speech — that is where intro ends
+        for t in range(end):
+            if is_speech[t]:
+                if t >= _ANIM_INTRO_MIN_SEC:
+                    return [RuleHit(0, t, "intro", "animation_theme_song", confidence=0.65)]
+                break
+    return []
+
+
+def rule_animation_outro(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+    """
+    Detect animation-style outros without speech keywords.
+
+    CLIP 'an end credits screen' probability is high in the last
+    ANIMATION_OUTRO_WINDOW_SEC → label it as outro.
+    """
+    T = len(grid["is_speech"])
+    cutoff = max(0, T - ANIMATION_OUTRO_WINDOW_SEC)
+
+    end_credits = grid.get("clip_an end credits screen", np.zeros(T, dtype=np.float32))
+
+    if end_credits[cutoff:].mean() > _ANIM_OUTRO_CLIP_THRESHOLD:
+        return [RuleHit(cutoff, T, "outro", "animation_end_credits", confidence=0.75)]
+    return []
+
+
 def run_all_rules(
     grid: Dict[str, np.ndarray],
     text_features: TextFeatures,
@@ -171,4 +240,6 @@ def run_all_rules(
     all_hits.extend(rule_recap_keyword(text_features, T))
     all_hits.extend(rule_intro_window(text_features, grid))
     all_hits.extend(rule_outro_window(text_features, grid))
+    all_hits.extend(rule_animation_intro(grid))
+    all_hits.extend(rule_animation_outro(grid))
     return all_hits

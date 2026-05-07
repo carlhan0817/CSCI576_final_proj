@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Callable, Optional
 
 from backend.pipeline.workspace import Workspace
 from backend.pipeline.logging_setup import get_logger
@@ -13,6 +14,16 @@ from backend.pipeline import transcribe as transcribe_stage
 
 DEFAULT_WORKSPACE_ROOT = Path(__file__).resolve().parents[2] / "workspace"
 
+# (progress %, human-readable label) for each pipeline stage
+_STAGES = [
+    (5,  "Probing video metadata"),
+    (15, "Extracting audio"),
+    (30, "Sampling frames at 1 FPS"),
+    (50, "Transcribing audio"),
+    (80, "Extracting multimodal features"),
+    (95, "Running fusion & segmentation"),
+]
+
 
 def run_pipeline(
     mp4_path: Path,
@@ -20,7 +31,15 @@ def run_pipeline(
     model_name: str = "base",
     device: str = "auto",
     force: bool = False,
+    progress_cb: Optional[Callable[[int, str], None]] = None,
 ) -> Workspace:
+    """Run the full pipeline.  progress_cb(pct, message) is called before each stage."""
+
+    def _progress(stage_idx: int) -> None:
+        if progress_cb is not None:
+            pct, msg = _STAGES[stage_idx]
+            progress_cb(pct, msg)
+
     if not mp4_path.exists():
         raise FileNotFoundError(f"Input MP4 not found: {mp4_path}")
 
@@ -32,18 +51,21 @@ def run_pipeline(
     resolved_device = _resolve_device(device)
     log.info("Device: %s", resolved_device)
 
+    _progress(0)
     if force or not ws.meta_raw_path.exists():
         log.info("Stage 1/4: probing video")
         probe_stage.probe_video(mp4_path, ws)
     else:
         log.info("Stage 1/4: skipped (meta_raw.json exists)")
 
+    _progress(1)
     if force or not ws.audio_path.exists():
         log.info("Stage 2/4: extracting audio")
         audio_stage.extract_audio(mp4_path, ws)
     else:
         log.info("Stage 2/4: skipped (audio_processed.wav exists)")
 
+    _progress(2)
     existing_frames = list(ws.frames_dir.glob("frame_*.jpg"))
     if force or not existing_frames:
         log.info("Stage 3/4: sampling frames at 1 FPS")
@@ -51,12 +73,14 @@ def run_pipeline(
     else:
         log.info("Stage 3/4: skipped (%d frames cached)", len(existing_frames))
 
+    _progress(3)
     if force or not ws.transcript_path.exists():
         log.info("Stage 4/4: transcribing audio with faster-whisper (%s)", model_name)
         transcribe_stage.transcribe(ws.audio_path, ws, model_name=model_name, device=resolved_device)
     else:
         log.info("Stage 4/4: skipped (transcript.json exists)")
 
+    _progress(4)
     from backend.pipeline.features.run import run_phase2
     if force or not ws.visual_features_path.exists() \
              or not ws.audio_features_path.exists() \
@@ -66,6 +90,7 @@ def run_pipeline(
     else:
         log.info("Phase 2: skipped (all feature files exist)")
 
+    _progress(5)
     try:
         from backend.pipeline.fusion.run import run_fusion
         if force or not ws.metadata_path.exists():
