@@ -13,7 +13,19 @@
       "Bash(python -m pytest tests/test_server.py -v --co)",
       "Bash(python -c \"from backend.server.app import create_app; app = create_app\\(\\); print\\('app routes:'\\); [print\\(' ', r.path, list\\(r.methods or []\\)\\) for r in app.routes]\")",
       "Bash(.venv/Scripts/python.exe -m pip install \"python-multipart>=0.0.9\")",
-      "Bash(.venv/Scripts/python.exe -c \"from backend.server.app import create_app; app = create_app\\(\\); [print\\(r.path, list\\(r.methods or []\\)\\) for r in app.routes if hasattr\\(r, 'methods'\\)]\")"
+      "Bash(.venv/Scripts/python.exe -c \"from backend.server.app import create_app; app = create_app\\(\\); [print\\(r.path, list\\(r.methods or []\\)\\) for r in app.routes if hasattr\\(r, 'methods'\\)]\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)[:3000]\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(.venv/bin/python3 *)",
+      "Bash(python3 *)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(/Users/peterwang/Desktop/CS/CSCI576/CSCI576_final_proj/.venv/bin/python *)",
+      "Bash(/Users/peterwang/Desktop/CS/CSCI576/CSCI576_final_proj/.venv/bin/python3 *)",
+      "Bash(uv --version)",
+      "Bash(uv pip *)",
+      "Bash(python -m backend.pipeline.fusion.run workspace/test_002_2/test_002_2.mp4)",
+      "Bash(xargs ls)"
     ]
   }
 }

@@ -26,6 +26,17 @@ from backend.pipeline.fusion.rules import RuleHit
 # ad blocks measure >0.3 cuts/sec on test_004.
 CLIP_SPONSORSHIP_MIN_CUT_DENSITY = 0.25  # cuts per second over the segment
 
+# Real ad inserts are at least 15s long (shortest in our dataset: 28s). Demote
+# CLIP-only sponsorship labels on shorter segments — they are lecture frames
+# that CLIP confuses with "advertisement slide".
+CLIP_SPONSORSHIP_MIN_DURATION = 15.0  # seconds
+
+# CLIP often classifies mid-video lecture title slides as "title card" (→ intro)
+# and chapter-end slides as "end credits" (→ outro). Constrain CLIP-derived
+# intro/outro labels to the same edge windows used by the keyword rules.
+CLIP_INTRO_WINDOW_SEC = 90.0
+CLIP_OUTRO_WINDOW_SEC = 90.0
+
 
 # Map CLIP scene label substrings → SegmentLabels (covers all 10 V2.1 prompts).
 # Substring matching against the raw label string (SCENE_LABELS in visual.py).
@@ -99,7 +110,12 @@ def _resolve_rule_label_for_segment(
     return best.label, best.confidence, triggered
 
 
-def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict[str, float]]:
+def _classify_by_clip_and_audio(
+    agg: Dict[str, float],
+    segment_start_sec: float = 0.0,
+    segment_end_sec: float = 0.0,
+    video_duration_sec: float = 0.0,
+) -> Tuple[str, float, Dict[str, float]]:
     """
     No rule matched → use CLIP + audio heuristic.
     Returns (label, confidence, {visual_score, audio_score, text_score}).
@@ -108,11 +124,11 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
     clip_keys = [k for k in agg.keys() if k.startswith("clip_")]
     if not clip_keys:
         return "core_content", 0.3, {"visual": 0.0, "audio": 0.0, "text": 0.0}
-    
+
     best_clip_key = max(clip_keys, key=lambda k: agg[k])
     best_clip_prob = agg[best_clip_key]
     raw_label = best_clip_key.replace("clip_", "")
-    
+
     # Try fuzzy match against the heuristic table
     mapped_label = "core_content"  # default
     for substring, target in CLIP_LABEL_TO_SEGMENT.items():
@@ -125,6 +141,23 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
     if speech_ratio < 0.1 and mapped_label == "core_content":
         mapped_label = "filler"
 
+    # Constrain CLIP-derived intro/outro labels to video edges. CLIP often
+    # misclassifies mid-video lecture title slides as "title card" (→ intro)
+    # and chapter-end slides as "end credits" (→ outro). The keyword rules
+    # already enforce edge windows; apply the same constraint to CLIP.
+    if video_duration_sec > 0:
+        seg_dur = segment_end_sec - segment_start_sec
+        if mapped_label == "intro" and segment_start_sec > CLIP_INTRO_WINDOW_SEC:
+            mapped_label = "core_content"
+        elif mapped_label == "outro":
+            outro_cutoff = video_duration_sec - CLIP_OUTRO_WINDOW_SEC
+            if segment_start_sec < outro_cutoff:
+                mapped_label = "core_content"
+        # Real ad inserts are long (≥ 28s in our dataset). Short CLIP-only
+        # sponsorship hits on lecture frames are almost always false positives.
+        elif mapped_label == "sponsorship" and seg_dur < CLIP_SPONSORSHIP_MIN_DURATION:
+            mapped_label = "core_content"
+
     # CLIP zero-shot regularly mislabels static lecture slides as
     # "advertisement slide". Real ads have rapid scene cuts; demote sponsorship
     # candidates whose cut density is below CLIP_SPONSORSHIP_MIN_CUT_DENSITY.
@@ -134,14 +167,14 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
         cut_density = agg.get("is_hard_cut_inner", agg.get("is_hard_cut", 0.0))
         if cut_density < CLIP_SPONSORSHIP_MIN_CUT_DENSITY:
             mapped_label = "core_content"
-    
+
     visual_score = best_clip_prob
     audio_score = speech_ratio  # higher speech = more likely "real" content
     text_score = float(agg.get("has_text", 0.0))
-    
+
     # Confidence = average of three modality scores
     confidence = (visual_score + audio_score + text_score) / 3.0
-    
+
     return mapped_label, confidence, {
         "visual": visual_score,
         "audio": audio_score,
@@ -188,6 +221,7 @@ def classify_segments(
     if hard_cut_set is None:
         hard_cut_set = set()
 
+    T = len(grid["is_speech"])
     segments: List[Segment] = []
     for i in range(len(boundaries) - 1):
         s = boundaries[i]
@@ -205,7 +239,7 @@ def classify_segments(
         else:
             agg["is_hard_cut_inner"] = 0.0
         rule_label, rule_conf, triggered_rules = _resolve_rule_label_for_segment(rule_hits, s, e)
-        
+
         if rule_label:
             label = rule_label
             confidence = rule_conf
@@ -217,7 +251,12 @@ def classify_segments(
             audio_score = agg.get("is_speech", 0.0)
             text_score = float(agg.get("has_text", 0.0))
         else:
-            label, confidence, scores = _classify_by_clip_and_audio(agg)
+            label, confidence, scores = _classify_by_clip_and_audio(
+                agg,
+                segment_start_sec=float(s),
+                segment_end_sec=float(e),
+                video_duration_sec=float(T),
+            )
             visual_score = scores["visual"]
             audio_score = scores["audio"]
             text_score = scores["text"]

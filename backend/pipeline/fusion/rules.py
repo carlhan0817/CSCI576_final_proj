@@ -218,6 +218,11 @@ def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
 # throughout the ad body. See docs/walkthrough/path-z-deferred.md for context.
 AD_BLOCK_MIN_DURATION = 10           # min length of a sustained-drift run (seconds)
 AD_BLOCK_BOUNDARY_TOLERANCE = 3      # how close a hard cut must be to count as "bounding"
+# At the very start of a video the MFCC baseline hasn't stabilised yet, so the
+# first few seconds often show spurious drift against the rest of the lecture.
+# Skip any run that ends before this guard to suppress false-positive ad_block
+# hits on the opening frames.
+AD_BLOCK_START_GUARD = 30            # ignore runs that end within the first N seconds
 
 # Block-drift thresholds (empirical: cover both test_001 and test_004 with
 # clean baseline separation; see scripts/diagnose_ad_block.py).
@@ -290,12 +295,16 @@ def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     # Audio runs are trusted standalone; promote to BOTH confidence when a
     # bounded visual run agrees.
     for run in audio_runs:
+        if run[1] <= AD_BLOCK_START_GUARD:
+            continue  # opening-frames false positive guard
         has_visual_support = any(_runs_overlap(run, vr) for vr in visual_runs_bounded)
         conf = AD_BLOCK_BOTH_CONFIDENCE if has_visual_support else AD_BLOCK_AUDIO_CONFIDENCE
         hits.append(RuleHit(run[0], run[1], "sponsorship", "ad_block", confidence=conf))
 
     # Visual-only path: bounded run with no audio overlap.
     for vrun in visual_runs_bounded:
+        if vrun[1] <= AD_BLOCK_START_GUARD:
+            continue  # opening-frames false positive guard
         if any(_runs_overlap(vrun, ar) for ar in audio_runs):
             continue
         hits.append(RuleHit(vrun[0], vrun[1], "sponsorship", "ad_block",

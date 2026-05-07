@@ -212,6 +212,16 @@ function nextSegment() {
   if (next) seekTo(next.start_sec);
 }
 
+function playContentOnly() {
+  if (!state.metadata) return;
+  const first = state.metadata.segments.find(s => s.label === "core_content");
+  if (!first) { setStatus("no core_content segments found"); return; }
+  state.skipMode = true;
+  $("skip-non-content").checked = true;
+  seekTo(first.start_sec);
+  setStatus("playing content only — non-content will be skipped");
+}
+
 function onTimeUpdate() {
   if (!state.skipMode || !state.metadata) return;
   const now = $("player").currentTime;
@@ -272,4 +282,5 @@ document.addEventListener("DOMContentLoaded", () => {
   $("player").addEventListener("timeupdate", onTimeUpdate);
   $("save-edits").addEventListener("click", saveEdits);
   $("upload-btn").addEventListener("click", uploadVideo);
+  $("play-content-only").addEventListener("click", playContentOnly);
 });

@@ -26,6 +26,13 @@ h1 { margin: 0 0 8px; font-size: 18px; }
 #controls > * { margin-right: 8px; }
 #status { color: #555; font-style: italic; }
 
+#play-content-only {
+  background: #27ae60; color: #fff;
+  border: none; padding: 6px 14px; border-radius: 4px;
+  font-size: 14px; font-weight: bold; cursor: pointer;
+}
+#play-content-only:hover { background: #219a52; }
+
 table { border-collapse: collapse; margin-top: 8px; }
 th, td { border: 1px solid #ccc; padding: 2px 6px; font-size: 13px; }
 

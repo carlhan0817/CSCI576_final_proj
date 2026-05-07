@@ -32,6 +32,11 @@ MIN_SEGMENT_DURATION = 2.0          # seconds — absorb shorter into stronger n
 MAX_SEG_DURATION = 300.0            # F3 — force-split segments longer than this
 CONTEXT_FILLER_MAX_SEC = 30         # F4 — max filler width eligible for relabel
 SPONSORSHIP_BRIDGE_MAX_GAP = 12.0   # bridge two sponsorship blocks across a gap
+# Hard-cut protection is for preserving meaningful scene boundaries *inside* a
+# long same-label run (e.g. two distinct ad blocks that happen to be adjacent).
+# A hard cut before a very short segment is editorial pacing, not a content
+# boundary — skip protection for these so high-cut-rate videos don't fragment.
+SHORT_SEGMENT_MERGE_SEC = 20.0      # relax hard-cut guard for segments shorter than this
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
@@ -83,7 +88,8 @@ def merge_adjacent_same_label(segments: List[Segment]) -> List[Segment]:
     out = [segments[0]]
     for seg in segments[1:]:
         same_label = seg.label == out[-1].label
-        protected = seg.has_hard_cut_before
+        is_short = (seg.end_sec - seg.start_sec) < SHORT_SEGMENT_MERGE_SEC
+        protected = seg.has_hard_cut_before and not is_short
         if same_label and not protected:
             out[-1] = _merge_two(out[-1], seg, out[-1].segment_id)
         else:
@@ -217,9 +223,9 @@ def absorb_short_segments(segments: List[Segment]) -> List[Segment]:
 # ── Fix 4: filler-in-core context propagation ────────────────────────────────
 
 def propagate_context(segments: List[Segment]) -> List[Segment]:
-    """Re-label short filler segments that are flanked on BOTH sides by
-    core_content. These are pauses or b-roll inside ongoing content, not
-    genuine filler."""
+    """Re-label short filler/dead_air segments that are flanked on BOTH sides
+    by core_content. These are pauses or cinematic silences inside ongoing
+    content, not genuine filler / technical dead air."""
     if len(segments) < 3:
         return segments
 
@@ -229,7 +235,7 @@ def propagate_context(segments: List[Segment]) -> List[Segment]:
         changed = False
         for i in range(1, len(out) - 1):
             seg = out[i]
-            if seg.label != "filler":
+            if seg.label not in ("filler", "dead_air"):
                 continue
             if seg.end_sec - seg.start_sec > CONTEXT_FILLER_MAX_SEC:
                 continue
