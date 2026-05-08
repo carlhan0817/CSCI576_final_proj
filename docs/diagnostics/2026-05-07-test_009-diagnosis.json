@@ -1,0 +1,978 @@
+{
+  "q1": {
+    "rule_stats": {
+      "ad_block": {
+        "fired_total_sec": 78,
+        "tp_sec": 30,
+        "fp_sec": 48,
+        "top_fp_runs": [
+          {
+            "start": 384,
+            "end": 408,
+            "len": 24
+          },
+          {
+            "start": 182,
+            "end": 200,
+            "len": 18
+          },
+          {
+            "start": 705,
+            "end": 711,
+            "len": 6
+          }
+        ]
+      },
+      "dead_air": {
+        "fired_total_sec": 8,
+        "tp_sec": 0,
+        "fp_sec": 8,
+        "top_fp_runs": [
+          {
+            "start": 42,
+            "end": 50,
+            "len": 8
+          }
+        ]
+      },
+      "holding_screen": {
+        "fired_total_sec": 25,
+        "tp_sec": 0,
+        "fp_sec": 25,
+        "top_fp_runs": [
+          {
+            "start": 662,
+            "end": 675,
+            "len": 13
+          },
+          {
+            "start": 149,
+            "end": 161,
+            "len": 12
+          }
+        ]
+      },
+      "vlog_speech_burst": {
+        "fired_total_sec": 125,
+        "tp_sec": 92,
+        "fp_sec": 33,
+        "top_fp_runs": [
+          {
+            "start": 182,
+            "end": 215,
+            "len": 33
+          }
+        ]
+      }
+    },
+    "global": {
+      "gt_ad_total_sec": 116,
+      "pred_sponsorship_total_sec": 181,
+      "tp_sec": 93,
+      "fp_sec": 88,
+      "fn_sec": 23,
+      "precision": 0.5138121546961326,
+      "recall": 0.8017241379310345
+    },
+    "fn_rule_counts": {}
+  },
+  "q2": {
+    "A_TP_ad_correct": {
+      "n_sec": 93,
+      "audio_block_drift": {
+        "p15": 0.8643073916435242,
+        "p50": 1.0911113023757935,
+        "p85": 1.4360100269317628,
+        "mean": 1.1156120921975823
+      },
+      "style_block_drift": {
+        "p15": 0.2859804153442383,
+        "p50": 0.3636566996574402,
+        "p85": 0.4396030902862549,
+        "mean": 0.3645008199958391
+      },
+      "rms_energy": {
+        "p15": 0.0326399989426136,
+        "p50": 0.09851899743080139,
+        "p85": 0.152606999874115,
+        "mean": 0.09694723677270675
+      },
+      "is_speech": {
+        "p15": 1.0,
+        "p50": 1.0,
+        "p85": 1.0,
+        "mean": 0.9354838709677419
+      }
+    },
+    "B_FN_ad_missed": {
+      "n_sec": 23,
+      "audio_block_drift": {
+        "p15": 1.0336028575897216,
+        "p50": 1.1628613471984863,
+        "p85": 1.4998683214187623,
+        "mean": 1.213776197122491
+      },
+      "style_block_drift": {
+        "p15": 0.24487634897232055,
+        "p50": 0.35786062479019165,
+        "p85": 0.3898097276687622,
+        "mean": 0.33648971371028735
+      },
+      "rms_energy": {
+        "p15": 0.053532398864626886,
+        "p50": 0.08395300060510635,
+        "p85": 0.12629469558596612,
+        "mean": 0.08716304337038942
+      },
+      "is_speech": {
+        "p15": 0.0,
+        "p50": 1.0,
+        "p85": 1.0,
+        "mean": 0.5217391304347826
+      }
+    },
+    "C_FP_content_painted_sp": {
+      "n_sec": 88,
+      "audio_block_drift": {
+        "p15": 0.9904208868741988,
+        "p50": 1.3286681771278381,
+        "p85": 1.5074225842952729,
+        "mean": 1.2653820684010333
+      },
+      "style_block_drift": {
+        "p15": 0.19485881626605986,
+        "p50": 0.283160924911499,
+        "p85": 0.35166018903255464,
+        "mean": 0.27743071114475076
+      },
+      "rms_energy": {
+        "p15": 0.06372839845716953,
+        "p50": 0.0930745005607605,
+        "p85": 0.13270389437675476,
+        "mean": 0.09919759101996367
+      },
+      "is_speech": {
+        "p15": 0.0,
+        "p50": 1.0,
+        "p85": 1.0,
+        "mean": 0.7272727272727273
+      }
+    },
+    "D_TN_content_correct": {
+      "n_sec": 189,
+      "audio_block_drift": {
+        "p15": 0.8395397543907165,
+        "p50": 1.166521430015564,
+        "p85": 1.3961768388748168,
+        "mean": 1.1257509545043662
+      },
+      "style_block_drift": {
+        "p15": 0.21148436069488524,
+        "p50": 0.2775883078575134,
+        "p85": 0.3490200757980347,
+        "mean": 0.282269383864428
+      },
+      "rms_energy": {
+        "p15": 0.06153540015220642,
+        "p50": 0.09260699898004532,
+        "p85": 0.16118400394916527,
+        "mean": 0.10696543379139806
+      },
+      "is_speech": {
+        "p15": 0.0,
+        "p50": 1.0,
+        "p85": 1.0,
+        "mean": 0.6190476190476191
+      }
+    }
+  },
+  "q3": [
+    {
+      "t": 58,
+      "gt": "content",
+      "pred": "filler",
+      "rules": [],
+      "is_speech": 0,
+      "rms": 0.0103,
+      "bw": 1662.9,
+      "audio_drift": 1.011,
+      "visual_drift": 0.246,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 59,
+      "gt": "content",
+      "pred": "core_content",
+      "rules": [],
+      "is_speech": 0,
+      "rms": 0.0926,
+      "bw": 2072.8,
+      "audio_drift": 0.791,
+      "visual_drift": 0.234,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 60,
+      "gt": "ad",
+      "pred": "core_content",
+      "rules": [],
+      "is_speech": 0,
+      "rms": 0.0554,
+      "bw": 1956.7,
+      "audio_drift": 1.145,
+      "visual_drift": 0.238,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 61,
+      "gt": "ad",
+      "pred": "core_content",
+      "rules": [],
+      "is_speech": 1,
+      "rms": 0.0645,
+      "bw": 1816.1,
+      "audio_drift": 0.802,
+      "visual_drift": 0.426,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 62,
+      "gt": "ad",
+      "pred": "core_content",
+      "rules": [],
+      "is_speech": 1,
+      "rms": 0.0716,
+      "bw": 1586.1,
+      "audio_drift": 1.099,
+      "visual_drift": 0.39,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 63,
+      "gt": "ad",
+      "pred": "core_content",
+      "rules": [],
+      "is_speech": 1,
+      "rms": 0.0572,
+      "bw": 1809.0,
+      "audio_drift": 1.177,
+      "visual_drift": 0.365,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 64,
+      "gt": "ad",
+      "pred": "core_content",
+      "rules": [],
+      "is_speech": 1,
+      "rms": 0.032,
+      "bw": 2115.6,
+      "audio_drift": 1.104,
+      "visual_drift": 0.372,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 65,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0321,
+      "bw": 1606.3,
+      "audio_drift": 1.153,
+      "visual_drift": 0.422,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": "We'll shed here, bringing fiber to the masses with Kellogg's"
+    },
+    {
+      "t": 66,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 0,
+      "rms": 0.044,
+      "bw": 1475.9,
+      "audio_drift": 0.958,
+      "visual_drift": 0.421,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "Duty calls."
+    },
+    {
+      "t": 67,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0441,
+      "bw": 1380.5,
+      "audio_drift": 0.878,
+      "visual_drift": 0.455,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "Duty calls."
+    },
+    {
+      "t": 68,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0307,
+      "bw": 1971.0,
+      "audio_drift": 0.852,
+      "visual_drift": 0.46,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": "We'll shed?"
+    },
+    {
+      "t": 69,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 0,
+      "rms": 0.0241,
+      "bw": 2051.6,
+      "audio_drift": 0.862,
+      "visual_drift": 0.377,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": "Every darn day."
+    },
+    {
+      "t": 70,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0329,
+      "bw": 1714.2,
+      "audio_drift": 1.469,
+      "visual_drift": 0.43,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "Every darn day."
+    },
+    {
+      "t": 71,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0276,
+      "bw": 1842.1,
+      "audio_drift": 1.579,
+      "visual_drift": 0.425,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "Whoa."
+    },
+    {
+      "t": 72,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0185,
+      "bw": 1870.1,
+      "audio_drift": 1.638,
+      "visual_drift": 0.428,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll shed in the house."
+    },
+    {
+      "t": 73,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0182,
+      "bw": 2095.9,
+      "audio_drift": 1.564,
+      "visual_drift": 0.431,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "It's fiber time."
+    },
+    {
+      "t": 74,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 0,
+      "rms": 0.0189,
+      "bw": 2011.1,
+      "audio_drift": 1.554,
+      "visual_drift": 0.454,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": "Is that dog a shit son?"
+    },
+    {
+      "t": 75,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0553,
+      "bw": 2135.2,
+      "audio_drift": 1.557,
+      "visual_drift": 0.389,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": "Perfect."
+    },
+    {
+      "t": 76,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0328,
+      "bw": 1929.5,
+      "audio_drift": 1.524,
+      "visual_drift": 0.468,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll shed on the car."
+    },
+    {
+      "t": 77,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0152,
+      "bw": 2300.7,
+      "audio_drift": 1.172,
+      "visual_drift": 0.439,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "We'll too old for this shit."
+    },
+    {
+      "t": 78,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.007,
+      "bw": 2383.7,
+      "audio_drift": 1.252,
+      "visual_drift": 0.419,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "Kellogg's raisin bread."
+    },
+    {
+      "t": 79,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst",
+        "ad_block"
+      ],
+      "is_speech": 1,
+      "rms": 0.0456,
+      "bw": 2361.8,
+      "audio_drift": 1.538,
+      "visual_drift": 0.458,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": "High fiber, happy go."
+    },
+    {
+      "t": 80,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0098,
+      "bw": 2109.7,
+      "audio_drift": 1.172,
+      "visual_drift": 0.478,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 81,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0114,
+      "bw": 1872.1,
+      "audio_drift": 1.085,
+      "visual_drift": 0.452,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 82,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0451,
+      "bw": 1813.2,
+      "audio_drift": 1.115,
+      "visual_drift": 0.395,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 83,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0471,
+      "bw": 1463.7,
+      "audio_drift": 1.189,
+      "visual_drift": 0.453,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 84,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0529,
+      "bw": 1647.6,
+      "audio_drift": 1.471,
+      "visual_drift": 0.419,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 85,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0775,
+      "bw": 2021.5,
+      "audio_drift": 1.229,
+      "visual_drift": 0.349,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 86,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0841,
+      "bw": 1620.4,
+      "audio_drift": 1.241,
+      "visual_drift": 0.498,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 87,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.056,
+      "bw": 1628.3,
+      "audio_drift": 1.093,
+      "visual_drift": 0.544,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 88,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.0909,
+      "bw": 1635.6,
+      "audio_drift": 0.734,
+      "visual_drift": 0.365,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 89,
+      "gt": "ad",
+      "pred": "sponsorship",
+      "rules": [
+        "vlog_speech_burst"
+      ],
+      "is_speech": 1,
+      "rms": 0.1053,
+      "bw": 1687.4,
+      "audio_drift": 0.778,
+      "visual_drift": 0.298,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 90,
+      "gt": "content",
+      "pred": "filler",
+      "rules": [],
+      "is_speech": 0,
+      "rms": 0.1111,
+      "bw": 2235.9,
+      "audio_drift": 0.566,
+      "visual_drift": 0.353,
+      "hard_cut": 1,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 91,
+      "gt": "content",
+      "pred": "filler",
+      "rules": [],
+      "is_speech": 0,
+      "rms": 0.1135,
+      "bw": 1533.3,
+      "audio_drift": 0.608,
+      "visual_drift": 0.322,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": ""
+    },
+    {
+      "t": 92,
+      "gt": "content",
+      "pred": "filler",
+      "rules": [],
+      "is_speech": 0,
+      "rms": 0.0831,
+      "bw": 1822.4,
+      "audio_drift": 0.381,
+      "visual_drift": 0.328,
+      "hard_cut": 0,
+      "ocr_comm": "",
+      "transcript": ""
+    }
+  ],
+  "q4": {
+    "ramp_ad_TP_330_361": {
+      "start": 330,
+      "end": 361,
+      "len_sec": 31,
+      "audio_block_drift": {
+        "p15": 0.8647298514842987,
+        "p50": 1.1439913511276245,
+        "p85": 1.5035536289215088,
+        "mean": 1.1720159880576595
+      },
+      "style_block_drift": {
+        "p15": 0.340534508228302,
+        "p50": 0.38780951499938965,
+        "p85": 0.44055286049842834,
+        "mean": 0.3871165417855786
+      },
+      "rms_energy": {
+        "p15": 0.07503700256347656,
+        "p50": 0.12471900135278702,
+        "p85": 0.15451299399137497,
+        "mean": 0.11622267778241827
+      },
+      "is_speech": {
+        "sum": 23,
+        "frac": 0.7419354838709677
+      },
+      "is_hard_cut": {
+        "sum": 14,
+        "frac": 0.45161290322580644
+      },
+      "has_url": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_price": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_phone": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_cta": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_brand_lockup": {
+        "sum": 0,
+        "frac": 0.0
+      }
+    },
+    "post_ramp_FP_363_456": {
+      "start": 363,
+      "end": 456,
+      "len_sec": 93,
+      "audio_block_drift": {
+        "p15": 0.8405183792114257,
+        "p50": 1.4418963193893433,
+        "p85": 1.6723135948181154,
+        "mean": 1.3083372789044534
+      },
+      "style_block_drift": {
+        "p15": 0.17902398109436035,
+        "p50": 0.2507938742637634,
+        "p85": 0.29956085681915284,
+        "mean": 0.2462419662424313
+      },
+      "rms_energy": {
+        "p15": 0.05987640023231506,
+        "p50": 0.12849900126457214,
+        "p85": 0.15446820557117463,
+        "mean": 0.11652682809739985
+      },
+      "is_speech": {
+        "sum": 15,
+        "frac": 0.16129032258064516
+      },
+      "is_hard_cut": {
+        "sum": 36,
+        "frac": 0.3870967741935484
+      },
+      "has_url": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_price": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_phone": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_cta": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_brand_lockup": {
+        "sum": 0,
+        "frac": 0.0
+      }
+    },
+    "kelloggs_ad_FN_60_90": {
+      "start": 60,
+      "end": 90,
+      "len_sec": 30,
+      "audio_block_drift": {
+        "p15": 0.867450276017189,
+        "p50": 1.1718098521232605,
+        "p85": 1.5482144474983215,
+        "mean": 1.1993512153625487
+      },
+      "style_block_drift": {
+        "p15": 0.3677871018648148,
+        "p50": 0.42547738552093506,
+        "p85": 0.4594925820827484,
+        "mean": 0.41731537580490113
+      },
+      "rms_energy": {
+        "p15": 0.018284350726753475,
+        "p50": 0.0440519992262125,
+        "p85": 0.06913874894380569,
+        "mean": 0.04358649963202576
+      },
+      "is_speech": {
+        "sum": 26,
+        "frac": 0.8666666666666667
+      },
+      "is_hard_cut": {
+        "sum": 13,
+        "frac": 0.43333333333333335
+      },
+      "has_url": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_price": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_phone": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_cta": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_brand_lockup": {
+        "sum": 0,
+        "frac": 0.0
+      }
+    },
+    "post_kelloggs_FP_90_200": {
+      "start": 90,
+      "end": 200,
+      "len_sec": 110,
+      "audio_block_drift": {
+        "p15": 0.6109495997428894,
+        "p50": 1.161421775817871,
+        "p85": 1.4387042760848998,
+        "mean": 1.0581872577017004
+      },
+      "style_block_drift": {
+        "p15": 0.20931073725223542,
+        "p50": 0.2764419615268707,
+        "p85": 0.3873810589313507,
+        "mean": 0.2943160728974776
+      },
+      "rms_energy": {
+        "p15": 0.07615220136940479,
+        "p50": 0.11852549761533737,
+        "p85": 0.199937903881073,
+        "mean": 0.13723483651199125
+      },
+      "is_speech": {
+        "sum": 33,
+        "frac": 0.3
+      },
+      "is_hard_cut": {
+        "sum": 43,
+        "frac": 0.39090909090909093
+      },
+      "has_url": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_price": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_phone": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_cta": {
+        "sum": 0,
+        "frac": 0.0
+      },
+      "has_brand_lockup": {
+        "sum": 0,
+        "frac": 0.0
+      }
+    }
+  },
+  "q5": {
+    "n_music_segments": 3,
+    "music_total_sec": 34.0,
+    "music_with_sponsor_match": 0,
+    "global_sponsor_keyword_hits": 0,
+    "music_segments_sample": [
+      {
+        "id": 0,
+        "start": 0.0,
+        "end": 10.0,
+        "text": "Music",
+        "matched_keywords": []
+      },
+      {
+        "id": 1,
+        "start": 10.0,
+        "end": 20.0,
+        "text": "Music",
+        "matched_keywords": []
+      },
+      {
+        "id": 126,
+        "start": 728.6,
+        "end": 742.6,
+        "text": "Music",
+        "matched_keywords": []
+      }
+    ]
+  }
+}
