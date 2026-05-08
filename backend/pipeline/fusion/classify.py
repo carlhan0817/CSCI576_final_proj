@@ -34,7 +34,8 @@ CLIP_LABEL_TO_SEGMENT: Dict[str, str] = {
     "end credits":        "outro",
     "title card":         "intro",
     # Sponsor / promo
-    "advertisement":      "ad",
+    "advertisement":      "ad",    # matches "an advertisement slide" (legacy) and
+    "commercial":         "ad",    # matches "a television commercial" (v2.2)
     "sponsor logo":       "ad",
 }
 
@@ -113,12 +114,17 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
             mapped_label = target
             break
     
-    # Audio modifier: if very little speech, lean toward transition/filler.
-    # Exception: animation content ("an animated scene") is core content regardless
-    # of speech — action/music scenes have no dialogue but are genuine content.
+    # Audio modifier: if very little speech AND no transcript text, lean toward
+    # transition/filler.  Two exceptions:
+    #   1. Animation content ("an animated scene") is core content regardless of speech —
+    #      action/music scenes have no dialogue but are genuine content.
+    #   2. If the transcript has words in this segment (has_text > 0), the host is
+    #      speaking even if the VAD missed it (common in music-heavy or animation audio).
     speech_ratio = agg.get("is_speech", 0.0)
+    text_coverage = agg.get("has_text", 0.0)
     is_animation_content = "animated" in raw_label
-    if speech_ratio < 0.1 and mapped_label == "core_content" and not is_animation_content:
+    has_spoken_content = speech_ratio >= 0.1 or text_coverage > 0.0
+    if not has_spoken_content and mapped_label == "core_content" and not is_animation_content:
         mapped_label = "filler"
 
     visual_score = best_clip_prob

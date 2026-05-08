@@ -19,6 +19,11 @@ BLACK_FRAME_VARIANCE_MAX = 50.0    # variance below this → pure-color frame
 # ── CLIP scene prompts (10 labels, covering all taxonomy classes) ─────────────
 # Expanded from 4 → 10 to make all taxonomy labels reachable via the CLIP
 # fallback classifier in classify.py.
+#
+# Ad-detection prompts: "a television commercial" is broader than the old
+# "an advertisement slide" and captures inserted video ads (food, tech, etc.)
+# that don't look like static slides.  "a sponsor logo or product" kept for
+# watermark/logo-overlay detection.
 SCENE_LABELS = [
     # Core content
     "a presentation slide",
@@ -29,7 +34,7 @@ SCENE_LABELS = [
     "an end credits screen",
     "a title card",
     # Sponsor / promo
-    "an advertisement slide",
+    "a television commercial",
     "a sponsor logo or product",
     # Other non-content
     "a video game interface",

@@ -27,8 +27,12 @@ class RuleHit:
 SPONSOR_KEYWORDS = [
     "sponsored by", "today's video is brought to you by", "brought to you by",
     "thanks to our sponsor", "this video is sponsored", "use code", "promo code",
-    "go to", "check out the link", "the link in the description",
+    "the link in the description",
 ]
+# Phrases removed from SPONSOR_KEYWORDS that may still appear in cached text_features.json
+# from older pipeline runs.  Explicitly block them in rule_sponsor_keyword so cached
+# matches don't trigger false ad labels.
+_REMOVED_SPONSOR_KEYWORDS: frozenset = frozenset({"go to", "check out the link"})
 INTRO_KEYWORDS = [
     "welcome back", "welcome to", "in today's video", "in this video",
     "what's up everyone", "hey guys", "hello and welcome",
@@ -108,7 +112,11 @@ def rule_sponsor_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
     """Sentences with sponsor matched_keywords → ad candidates (extends ±15s)."""
     hits = []
     for seg in text_features.segments:
-        sponsor_matches = [kw for kw in seg.matched_keywords if kw.startswith("sponsor:")]
+        sponsor_matches = [
+            kw for kw in seg.matched_keywords
+            if kw.startswith("sponsor:")
+            and kw.split(":", 1)[1] not in _REMOVED_SPONSOR_KEYWORDS
+        ]
         if sponsor_matches:
             s = max(0, int(np.floor(seg.start - 15)))
             e = min(T, int(np.ceil(seg.end + 15)))

@@ -31,6 +31,10 @@ MIN_SEGMENT_DURATION = 2.0   # seconds — absorb shorter segments into neighbor
 MAX_SEG_DURATION = 300.0     # seconds — force-split segments longer than this
 CONTEXT_FILLER_MAX_SEC = 30  # seconds — max filler duration eligible for relabeling
 
+AD_NOISE_GAP_TOLERANCE = 15.0   # seconds — gaps ≤ this link "ad" segs into one cluster
+AD_NOISE_MIN_SPAN      = 20.0   # seconds — clusters shorter than this (with no rule hits)
+                                 #           are CLIP noise → relabeled filler
+
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
@@ -217,6 +221,79 @@ def absorb_short_segments(segments: List[Segment]) -> List[Segment]:
     return out
 
 
+# ── Suppress isolated CLIP "ad" false positives ───────────────────────────────
+
+def suppress_isolated_ad_noise(segments: List[Segment]) -> List[Segment]:
+    """
+    CLIP occasionally mis-labels short content bursts as 'ad'.
+
+    Algorithm:
+      1. Group 'ad' segments into clusters: two 'ad' segments belong to the same
+         cluster when the gap between them (across any intervening labels) is
+         ≤ AD_NOISE_GAP_TOLERANCE seconds.
+      2. Compute span = last_end − first_start for each cluster.
+      3. If span < AD_NOISE_MIN_SPAN AND every segment in the cluster has an
+         empty triggered_rules list (i.e., CLIP-only, no keyword/rule confirmation),
+         relabel the entire cluster to 'filler'.
+
+    This removes CLIP noise (e.g. a 12-second burst of 'ad'-looking educational
+    content) without touching genuine ad blocks (which span ≥ 20 s) or any ad
+    confirmed by a hard rule.
+    """
+    if not segments:
+        return segments
+
+    out = list(segments)
+    n = len(out)
+    visited = [False] * n
+    i = 0
+    while i < n:
+        if out[i].label != "ad" or visited[i]:
+            i += 1
+            continue
+
+        # Grow the cluster forward: skip non-"ad" segments while the gap is small.
+        cluster: List[int] = [i]
+        visited[i] = True
+        j = i + 1
+        while j < n:
+            # Find the next "ad" segment from position j.
+            k = j
+            while k < n and out[k].label != "ad":
+                k += 1
+            if k >= n:
+                break
+            gap = out[k].start_sec - out[cluster[-1]].end_sec
+            if gap <= AD_NOISE_GAP_TOLERANCE:
+                cluster.append(k)
+                visited[k] = True
+                j = k + 1
+            else:
+                break
+
+        span = out[cluster[-1]].end_sec - out[cluster[0]].start_sec
+        rule_free = all(len(out[ci].evidence.triggered_rules) == 0 for ci in cluster)
+
+        if span < AD_NOISE_MIN_SPAN and rule_free:
+            for ci in cluster:
+                s = out[ci]
+                out[ci] = Segment(
+                    segment_id=s.segment_id,
+                    start_sec=s.start_sec,
+                    end_sec=s.end_sec,
+                    label="filler",
+                    confidence=s.confidence,
+                    evidence=s.evidence,
+                    summary=s.summary,
+                    has_hard_cut_before=s.has_hard_cut_before,
+                    user_corrected=False,
+                )
+
+        i = cluster[-1] + 1
+
+    return out
+
+
 # ── Fix 4: context-propagation pass ──────────────────────────────────────────
 
 def propagate_context(segments: List[Segment]) -> List[Segment]:
@@ -338,15 +415,19 @@ def smooth_pipeline(
       3. absorb_short_segments
       4. propagate_context               (Fix 4: filler inside core_content → core)
       5. merge_adjacent_same_label       (clean up after relabeling)
-      6. promote_stranded_candidates     (Fix 5: speech-flip boundaries > 28 s from
+      6. suppress_isolated_ad_noise      (remove short CLIP-only "ad" clusters < 20 s)
+      7. merge_adjacent_same_label       (clean up after suppression)
+      8. promote_stranded_candidates     (Fix 5: speech-flip boundaries > 28 s from
                                           nearest seg boundary become seg boundaries)
-      7. renumber
+      9. renumber
     """
     s = merge_adjacent_same_label(segments)
     if raw_boundaries and grid is not None:
         s = split_oversized_segments(s, raw_boundaries, grid)
     s = absorb_short_segments(s)
     s = propagate_context(s)
+    s = merge_adjacent_same_label(s)
+    s = suppress_isolated_ad_noise(s)
     s = merge_adjacent_same_label(s)
     if raw_boundaries:
         s = promote_stranded_candidates(s, raw_boundaries)

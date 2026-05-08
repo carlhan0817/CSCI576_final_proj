@@ -49,9 +49,11 @@ Scoring
 
 Selection filters
 -----------------
-  MIN_BLOCK_SEC       — both flanking content blocks must be ≥ 90 s
-  MIN_AD_SPACING_SEC  — selected candidates must be ≥ 300 s apart; also enforced as a
+  MIN_BLOCK_SEC       — both flanking content blocks must be ≥ 60 s
+  MIN_AD_SPACING_SEC  — selected candidates must be ≥ 180 s apart; also enforced as a
                         minimum buffer before the video end
+  Fix 2: ad_precursor_set anchors only off "ad" segments ≥ 8 s or rule-confirmed,
+         so short CLIP-only blips do not falsely elevate nearby candidates.
 """
 from __future__ import annotations
 
@@ -63,8 +65,8 @@ from backend.pipeline.schemas import AdInsertionCandidate, Segment
 
 
 # ── Tunable constants ──────────────────────────────────────────────────────────
-MIN_BLOCK_SEC = 90.0          # minimum content duration on each side of a slot
-MIN_AD_SPACING_SEC = 300.0    # minimum gap between any two selected slots
+MIN_BLOCK_SEC = 60.0          # minimum content duration on each side of a slot
+MIN_AD_SPACING_SEC = 180.0    # minimum gap between any two selected slots
 SPONSOR_EXCLUSION_SEC = 60.0  # penalty radius around in-video ad segments
 # Minimum composite score required for the 4th+ candidate.  The first three slots
 # are always filled (backward-compatible behaviour for 3-ad videos); beyond that,
@@ -77,7 +79,7 @@ W_SPONSOR    = 0.1  # weight for sponsor-proximity penalty
 
 # Visual burst detection thresholds
 BURST_DENSITY_THRESHOLD       = 0.10   # hard cuts per second in a 60s window → ad block
-LUM_JUMP_THRESHOLD            = 30.0   # luminance increase at boundary → content→ad jump
+LUM_JUMP_THRESHOLD            = 25.0   # luminance increase at boundary → content→ad jump
 LUM_JUMP_CORROBORATION_THRESHOLD = 150.0  # |lum_delta| within ±10 s of a silence candidate
                                            # → audio+visual corroboration → burst-level priority
 
@@ -337,9 +339,12 @@ def score_candidates(
     if not candidates:
         return []
 
-    # Pre-filter: require at least MIN_AD_SPACING_SEC before the video ends so that the
-    # last selected break is never jammed into the final minutes.
-    candidates = [t for t in candidates if t + MIN_AD_SPACING_SEC <= duration_sec]
+    # Pre-filter: require at least MIN_BLOCK_SEC of content before the video ends so
+    # that no insertion point is jammed into the final segment.  MIN_AD_SPACING_SEC is
+    # a between-candidate spacing constraint enforced in the selection loop below; using
+    # it here as an end-buffer over-filters short/dense videos (e.g. a 10-min video
+    # with a valid insertion point 3 min from the end would be wrongly removed).
+    candidates = [t for t in candidates if t + MIN_BLOCK_SEC <= duration_sec]
     if not candidates:
         return []
 
@@ -348,14 +353,14 @@ def score_candidates(
     # they are direct visual evidence of an inserted ad block.
     burst_set: set = set(
         t for t in _find_burst_starts(grid)
-        if MIN_BLOCK_SEC <= t <= duration_sec - MIN_AD_SPACING_SEC
+        if MIN_BLOCK_SEC <= t <= duration_sec - MIN_BLOCK_SEC
     )
 
     # Inject audio silence starts: first second of each ≥SILENCE_MIN_SEC non-speech
     # run that follows speech.  Complements visual burst when no hard-cut evidence exists.
     silence_set: set = set(
         t for t in _find_silence_candidates(grid)
-        if MIN_BLOCK_SEC <= t <= duration_sec - MIN_AD_SPACING_SEC
+        if MIN_BLOCK_SEC <= t <= duration_sec - MIN_BLOCK_SEC
     )
 
     # Identify silence candidates corroborated by a large luminance jump within ±10 s.
@@ -383,14 +388,41 @@ def score_candidates(
 
     all_candidates = sorted(set(candidates) | high_priority | silence_set)
 
+    # Confirmed hard-cut candidates: segment boundaries with max signal (burst + large lum
+    # jump).  These are visually the strongest content→ad boundaries in the video and should
+    # compete with burst candidates even when there is no distinct audio silence or CLIP
+    # ad-label nearby.  Elevating to high_priority gives trans=1.0, breaking ties against
+    # weaker candidates that happen to have a good label transition.
+    if grid is not None:
+        hardcut_confirmed: set = {
+            t for t in all_candidates
+            if t not in high_priority
+            and _signal_strength(t, grid) >= 1.0
+        }
+        high_priority = high_priority | hardcut_confirmed
+    else:
+        hardcut_confirmed = set()
+
     # Ad-precursor candidates: any candidate within _AD_PRECURSOR_SEC *before* a
     # CLIP/rule-detected "ad" segment start.  The fusion segmenter may have placed a
     # clean boundary just before the ad label begins; that boundary is a perfect splice
     # point but its transition_bonus is often 0 (same label on both sides until the ad
     # segment is resolved).  Elevating it to high_priority gives trans=1.0 so it can
     # compete with burst/corroborated candidates.
+    #
+    # Fix 2: only anchor off "ad" segments that are either rule-confirmed OR long enough
+    # (≥ _AD_PRECURSOR_MIN_SEG_DUR) to be a genuine detected ad.  Short CLIP-only blips
+    # (2–7 s) should not create precursor elevation — they are likely false positives.
     _AD_PRECURSOR_SEC = 15.0
-    _ad_starts = frozenset(s.start_sec for s in segments if s.label == "ad")
+    _AD_PRECURSOR_MIN_SEG_DUR = 8.0
+    _ad_starts = frozenset(
+        s.start_sec for s in segments
+        if s.label == "ad"
+        and (
+            len(s.evidence.triggered_rules) > 0
+            or (s.end_sec - s.start_sec) >= _AD_PRECURSOR_MIN_SEG_DUR
+        )
+    )
     ad_precursor_set: set = {
         t for t in all_candidates
         if t not in high_priority
