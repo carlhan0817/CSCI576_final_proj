@@ -34,6 +34,23 @@ CONTEXT_FILLER_MAX_SEC = 30         # F4 — max filler width eligible for relab
 SPONSORSHIP_BRIDGE_MAX_GAP = 6.0    # bridge two sponsorship blocks across a gap
 SPONSORSHIP_BRIDGE_CORE_AUDIO_VETO = 0.5  # mid==core_content with audio_score >= this blocks bridging
 
+# Sponsorship FP suppression (test_009 vlog-mode tightening, 2026-05-08).
+#
+# Method 1 — clear_sponsorship_islands: short, sub-0.85-conf sponsorship blocks
+# fully surrounded by long core_content runs are vlog-mode rule mis-fires
+# (rule_ad_block / vlog_speech_burst on dialogue-heavy B-roll). 10s ceiling
+# protects real GT ads (test_009 ground-truth ads are 30/31/55s).
+SPONSORSHIP_ISLAND_MAX_SEC = 10.0
+SPONSORSHIP_ISLAND_MIN_NEIGHBOR_SEC = 30.0
+SPONSORSHIP_ISLAND_MAX_CONFIDENCE = 0.85
+
+# Method 2 — filter_short_low_conf_sponsorship: catch-all for tiny low-conf
+# sponsorship that island-clear missed (e.g. neighbour is intro/holding_screen
+# instead of core_content). 0.50 floor is below every TP block in test_009
+# (min TP conf = 0.75) but above the typical FP cluster (0.24–0.48).
+MIN_SPONSORSHIP_DURATION = 8.0
+MIN_SPONSORSHIP_CONFIDENCE = 0.50
+
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -250,6 +267,74 @@ def propagate_context(segments: List[Segment]) -> List[Segment]:
     return out
 
 
+# ── Sponsorship FP suppression (test_009 vlog-mode tightening) ───────────────
+
+def _relabel_to_core(seg: Segment) -> Segment:
+    return Segment(
+        segment_id=seg.segment_id,
+        start_sec=seg.start_sec,
+        end_sec=seg.end_sec,
+        label="core_content",
+        confidence=seg.confidence,
+        evidence=seg.evidence,
+        summary=seg.summary,
+        has_hard_cut_before=seg.has_hard_cut_before,
+        user_corrected=seg.user_corrected,
+    )
+
+
+def clear_sponsorship_islands(segments: List[Segment]) -> List[Segment]:
+    """Method 1: relabel short low-conf sponsorship surrounded by long core_content.
+
+    Mirrors propagate_context but for sponsorship. A vlog-mode rule_ad_block /
+    vlog_speech_burst hit on dialogue-heavy B-roll produces a 3-10s sponsorship
+    island in the middle of a core_content run. test_009 diagnosis (2026-05-08)
+    showed every such island is FP; real ad blocks are 26+s.
+    """
+    if len(segments) < 3:
+        return list(segments)
+
+    out = list(segments)
+    for i in range(1, len(out) - 1):
+        seg = out[i]
+        if seg.label != "sponsorship":
+            continue
+        if seg.end_sec - seg.start_sec > SPONSORSHIP_ISLAND_MAX_SEC:
+            continue
+        if seg.confidence > SPONSORSHIP_ISLAND_MAX_CONFIDENCE:
+            continue
+        L, R = out[i - 1], out[i + 1]
+        if L.label != "core_content" or R.label != "core_content":
+            continue
+        if (L.end_sec - L.start_sec) < SPONSORSHIP_ISLAND_MIN_NEIGHBOR_SEC:
+            continue
+        if (R.end_sec - R.start_sec) < SPONSORSHIP_ISLAND_MIN_NEIGHBOR_SEC:
+            continue
+        out[i] = _relabel_to_core(seg)
+    return out
+
+
+def filter_short_low_conf_sponsorship(segments: List[Segment]) -> List[Segment]:
+    """Method 2: relabel sponsorship segments shorter than MIN_SPONSORSHIP_DURATION
+    AND with confidence below MIN_SPONSORSHIP_CONFIDENCE.
+
+    Catch-all for FP that island-clear missed (e.g. neighbour is intro or
+    holding_screen). Both gates must trip — 7s @ 0.78 conf is kept, but 3s @
+    0.30 is dropped.
+    """
+    out = []
+    for seg in segments:
+        if (
+            seg.label == "sponsorship"
+            and (seg.end_sec - seg.start_sec) < MIN_SPONSORSHIP_DURATION
+            and seg.confidence < MIN_SPONSORSHIP_CONFIDENCE
+        ):
+            out.append(_relabel_to_core(seg))
+        else:
+            out.append(seg)
+    return out
+
+
 # ── Sponsorship bridging (existing) ──────────────────────────────────────────
 
 def bridge_sponsorship_gaps(
@@ -365,5 +450,10 @@ def smooth_pipeline(
             if len(bridged) == len(s):
                 break
             s = merge_adjacent_same_label(bridged)
+    # Sponsorship FP suppression (test_009): clear short low-conf islands first,
+    # then catch any remaining tiny low-conf sponsorship, then re-merge.
+    s = clear_sponsorship_islands(s)
+    s = filter_short_low_conf_sponsorship(s)
+    s = merge_adjacent_same_label(s)
     s = renumber(s)
     return s

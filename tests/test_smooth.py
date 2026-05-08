@@ -7,8 +7,15 @@ import pytest
 from backend.pipeline.schemas import Segment, SegmentEvidence
 from backend.pipeline.fusion.smooth import (
     MIN_SEGMENT_DURATION,
+    SPONSORSHIP_ISLAND_MAX_SEC,
+    SPONSORSHIP_ISLAND_MIN_NEIGHBOR_SEC,
+    SPONSORSHIP_ISLAND_MAX_CONFIDENCE,
+    MIN_SPONSORSHIP_DURATION,
+    MIN_SPONSORSHIP_CONFIDENCE,
     merge_adjacent_same_label,
     absorb_short_segments,
+    clear_sponsorship_islands,
+    filter_short_low_conf_sponsorship,
     renumber,
     smooth_pipeline,
 )
@@ -174,6 +181,123 @@ class TestRenumber:
         out = renumber(segs)
         assert [s.label for s in out] == ["intro", "core_content", "outro"]
         assert [s.segment_id for s in out] == [0, 1, 2]
+
+
+# ---------------------------------------------------------------------------
+# clear_sponsorship_islands  (test_009 FP suppression — method 1)
+# ---------------------------------------------------------------------------
+
+class TestClearSponsorshipIslands:
+    def _core(self, sid, start, end, conf=0.7):
+        return _seg(sid, start, end, "core_content", confidence=conf)
+
+    def _sp(self, sid, start, end, conf=0.7):
+        return _seg(sid, start, end, "sponsorship", confidence=conf)
+
+    def test_short_lowconf_island_between_long_core_is_cleared(self):
+        # 5s sponsorship between two 60s core blocks @ conf 0.78 → should clear
+        segs = [
+            self._core(0, 0.0, 60.0),
+            self._sp(1, 60.0, 65.0, conf=0.78),
+            self._core(2, 65.0, 125.0),
+        ]
+        out = clear_sponsorship_islands(segs)
+        assert all(s.label == "core_content" for s in out)
+
+    def test_long_island_kept(self):
+        # 26s sponsorship — exceeds SPONSORSHIP_ISLAND_MAX_SEC (10s); kept.
+        segs = [
+            self._core(0, 0.0, 60.0),
+            self._sp(1, 60.0, 86.0, conf=0.78),
+            self._core(2, 86.0, 150.0),
+        ]
+        out = clear_sponsorship_islands(segs)
+        assert any(s.label == "sponsorship" for s in out)
+
+    def test_high_confidence_island_kept(self):
+        # 5s but conf 0.90 — above SPONSORSHIP_ISLAND_MAX_CONFIDENCE; kept.
+        segs = [
+            self._core(0, 0.0, 60.0),
+            self._sp(1, 60.0, 65.0, conf=0.90),
+            self._core(2, 65.0, 125.0),
+        ]
+        out = clear_sponsorship_islands(segs)
+        assert any(s.label == "sponsorship" for s in out)
+
+    def test_short_neighbor_disqualifies(self):
+        # Right neighbor only 20s — below NEIGHBOR_MIN; sponsorship kept.
+        segs = [
+            self._core(0, 0.0, 60.0),
+            self._sp(1, 60.0, 65.0, conf=0.78),
+            self._core(2, 65.0, 85.0),  # 20s, < 30s
+        ]
+        out = clear_sponsorship_islands(segs)
+        assert any(s.label == "sponsorship" for s in out)
+
+    def test_non_core_neighbor_disqualifies(self):
+        # Left neighbor is intro (not core_content); sponsorship kept.
+        segs = [
+            _seg(0, 0.0, 60.0, "intro"),
+            self._sp(1, 60.0, 65.0, conf=0.78),
+            self._core(2, 65.0, 125.0),
+        ]
+        out = clear_sponsorship_islands(segs)
+        assert any(s.label == "sponsorship" for s in out)
+
+    def test_first_or_last_segment_not_cleared(self):
+        # No left neighbor — keep.
+        segs = [
+            self._sp(0, 0.0, 5.0, conf=0.78),
+            self._core(1, 5.0, 65.0),
+        ]
+        out = clear_sponsorship_islands(segs)
+        assert any(s.label == "sponsorship" for s in out)
+
+    def test_boundary_max_sec_inclusive(self):
+        # Exactly 10s should still be cleared (boundary).
+        segs = [
+            self._core(0, 0.0, 60.0),
+            self._sp(1, 60.0, 70.0, conf=0.78),
+            self._core(2, 70.0, 130.0),
+        ]
+        out = clear_sponsorship_islands(segs)
+        assert all(s.label == "core_content" for s in out)
+
+
+# ---------------------------------------------------------------------------
+# filter_short_low_conf_sponsorship  (test_009 FP suppression — method 2)
+# ---------------------------------------------------------------------------
+
+class TestFilterShortLowConfSponsorship:
+    def _sp(self, sid, start, end, conf):
+        return _seg(sid, start, end, "sponsorship", confidence=conf)
+
+    def test_short_low_conf_sponsorship_relabeled(self):
+        # 3s @ 0.40 — below both thresholds → relabel core_content
+        segs = [
+            _seg(0, 0.0, 60.0, "core_content"),
+            self._sp(1, 60.0, 63.0, conf=0.40),
+            _seg(2, 63.0, 120.0, "core_content"),
+        ]
+        out = filter_short_low_conf_sponsorship(segs)
+        assert all(s.label == "core_content" for s in out)
+
+    def test_short_high_conf_kept(self):
+        # 3s but conf 0.85 — above MIN_SPONSORSHIP_CONFIDENCE; kept.
+        segs = [self._sp(0, 0.0, 3.0, conf=0.85)]
+        out = filter_short_low_conf_sponsorship(segs)
+        assert out[0].label == "sponsorship"
+
+    def test_long_low_conf_kept(self):
+        # 20s @ conf 0.40 — duration above threshold; kept.
+        segs = [self._sp(0, 0.0, 20.0, conf=0.40)]
+        out = filter_short_low_conf_sponsorship(segs)
+        assert out[0].label == "sponsorship"
+
+    def test_other_labels_untouched(self):
+        segs = [_seg(0, 0.0, 3.0, "filler", confidence=0.30)]
+        out = filter_short_low_conf_sponsorship(segs)
+        assert out[0].label == "filler"
 
 
 # ---------------------------------------------------------------------------
