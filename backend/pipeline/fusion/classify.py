@@ -99,10 +99,17 @@ def _resolve_rule_label_for_segment(
     return best.label, best.confidence, triggered
 
 
-def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict[str, float]]:
+def _classify_by_clip_and_audio(
+    agg: Dict[str, float],
+    vlog_mode: bool = False,
+) -> Tuple[str, float, Dict[str, float]]:
     """
     No rule matched → use CLIP + audio heuristic.
     Returns (label, confidence, {visual_score, audio_score, text_score}).
+
+    vlog_mode: when True, suppress the speech-ratio-driven filler downgrade.
+    Vlog content has lots of low-speech B-roll seconds that GT labels as
+    core_content (video_content), not filler.
     """
     # Visual score: take the strongest CLIP label and map it
     clip_keys = [k for k in agg.keys() if k.startswith("clip_")]
@@ -120,9 +127,11 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
             mapped_label = target
             break
 
-    # Audio modifier: if very little speech, lean toward transition/filler
+    # Audio modifier: if very little speech, lean toward transition/filler.
+    # Skip in vlog mode: vlog B-roll routinely has speech_ratio < 0.1 but
+    # belongs to video_content per GT, not filler.
     speech_ratio = agg.get("is_speech", 0.0)
-    if speech_ratio < 0.1 and mapped_label == "core_content":
+    if speech_ratio < 0.1 and mapped_label == "core_content" and not vlog_mode:
         mapped_label = "filler"
 
     # CLIP zero-shot regularly mislabels static lecture slides as
@@ -188,6 +197,9 @@ def classify_segments(
     if hard_cut_set is None:
         hard_cut_set = set()
 
+    from backend.pipeline.fusion.rules import _is_vlog_mode
+    vlog_mode = _is_vlog_mode(grid)
+
     segments: List[Segment] = []
     for i in range(len(boundaries) - 1):
         s = boundaries[i]
@@ -217,7 +229,7 @@ def classify_segments(
             audio_score = agg.get("is_speech", 0.0)
             text_score = float(agg.get("has_text", 0.0))
         else:
-            label, confidence, scores = _classify_by_clip_and_audio(agg)
+            label, confidence, scores = _classify_by_clip_and_audio(agg, vlog_mode=vlog_mode)
             visual_score = scores["visual"]
             audio_score = scores["audio"]
             text_score = scores["text"]

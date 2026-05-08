@@ -267,7 +267,7 @@ VLOG_SPEECH_BURST_MIN_DURATION = 12
 #   - vlog B-roll montage with VO: cut >= 0.55 (rapid-fire scene changes)
 # The 0.20-0.55 band keeps real ads while rejecting both FP modes.
 VLOG_BURST_CUT_DENSITY_MIN = 0.20
-VLOG_BURST_CUT_DENSITY_MAX = 0.55
+VLOG_BURST_CUT_DENSITY_MAX = 0.50
 
 
 def _is_vlog_mode(grid: Dict[str, np.ndarray]) -> bool:
@@ -360,11 +360,22 @@ def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
         sf = float(is_speech[run[0]:run[1]].mean()) if run[1] > run[0] else 0.0
         return sf >= 0.5
 
+    def _vlog_audio_only_ok(run: Tuple[int, int]) -> bool:
+        # Stricter gate for the audio-only branch in vlog mode: MFCC drift
+        # alone fires on environment changes (outdoor->indoor, mic switch)
+        # not just inserted ads. Real vlog ads also carry dense dialogue
+        # (kelloggs 0.87, ramp 0.74, ubereats 0.91); a non-ad MFCC-drift
+        # bump like 384-408 sits at speech_frac=0.62 and gets rejected here.
+        if not vlog or is_speech is None:
+            return True
+        sf = float(is_speech[run[0]:run[1]].mean()) if run[1] > run[0] else 0.0
+        return sf >= 0.65
+
     audio_runs = [
         r for r in _find_runs(
             (a >= AUDIO_BLOCK_DRIFT_THRESHOLD).astype(np.int8),
             min_dur,
-        ) if _vlog_speech_ok(r)
+        ) if _vlog_audio_only_ok(r)
     ]
     raw_visual_runs = _find_runs(
         (v >= visual_thresh).astype(np.int8),
