@@ -23,9 +23,35 @@ from backend.pipeline.fusion.ad_slots import score_candidates
 # Minimum |lum_context_delta| at a hard cut that signals "content resuming after ad".
 # The ad boundary creates a large luminance shift in one direction; when the ad ends,
 # the luminance shifts back in the OPPOSITE direction by at least this much.
-_LUM_END_THRESHOLD = 50.0
+_LUM_END_THRESHOLD = 30.0
 _MIN_AD_SEC = 15.0   # shortest ad to consider
 _MAX_AD_SEC = 180.0  # longest ad to scan for end
+
+# Number of consecutive speech-positive seconds required at a hard cut to terminate an ad.
+# Ad voiceover bursts last 1-2s per product shot; a content host resumes for much longer.
+_SUSTAINED_SPEECH_SEC = 3
+
+# hc_burst_density value below which the cut rhythm has clearly returned to content levels.
+# BURST_DENSITY_THRESHOLD (in burst-start detection) is 0.10; this is a clear exit margin.
+_BURST_EXIT_THRESHOLD = 0.04
+
+# CLIP content-rollup signal: combined 3s rolling probability across content-facing labels.
+_CONTENT_CLIP_KEYS = (
+    "clip_a person talking to a camera",
+    "clip_a presentation slide",
+    "clip_a screen recording of software",
+)
+_CLIP_CONTENT_THRESHOLD = 0.40
+
+
+def _clip_content_score(t: int, grid: Dict[str, np.ndarray], T: int, window: int = 3) -> float:
+    """Mean content-CLIP probability summed across content keys over [t, t+window)."""
+    total = 0.0
+    for k in _CONTENT_CLIP_KEYS:
+        arr = grid.get(k)
+        if arr is not None:
+            total += float(arr[min(t, T - 1) : min(t + window, T)].mean())
+    return total
 
 
 def _relabel_ad_blocks(
@@ -37,18 +63,24 @@ def _relabel_ad_blocks(
     Relabel segments within detected ad blocks using insertion candidates as anchors.
 
     Each ad_insertion_candidate marks a visually confirmed ad start.  From that
-    anchor the function scans forward for the ad END using two signals:
+    anchor the function scans forward for the ad END using four signals:
 
-    Primary  — speech resumes at a hard cut: the host (or content narrator) begins
-               talking again at the exact frame where the ad splice ends.  This is
-               the most reliable signal because ads are typically silent or have
-               non-content audio.
+    Primary    — SUSTAINED speech (≥ _SUSTAINED_SPEECH_SEC consecutive seconds) at
+                 a hard cut. Single-second voiceover bursts inside the ad no longer
+                 trigger the end; only a host genuinely resuming does.
 
-    Secondary — lum_context_delta flips sign AND |delta| ≥ _LUM_END_THRESHOLD at a
-                hard cut: the screen brightness snaps back to the content level.
+    Secondary  — lum_context_delta flips sign AND |delta| ≥ _LUM_END_THRESHOLD at a
+                 hard cut: the screen brightness snaps back to the content level.
+
+    Tertiary   — hc_burst_density drops below _BURST_EXIT_THRESHOLD at a hard cut:
+                 the dense-cut visual edit rhythm of the ad has ended.
+
+    Quaternary — content-facing CLIP labels (host / slide / screen-recording) sum
+                 to ≥ _CLIP_CONTENT_THRESHOLD over a 3s window: visual semantics
+                 confirm content has returned.
 
     Whichever fires first (past _MIN_AD_SEC from the anchor) ends the window.
-    Falls back to _MAX_AD_SEC if neither signal fires.
+    Falls back to _MAX_AD_SEC if no signal fires.
 
     Using candidates as anchors limits relabeling to at most n_ads small windows
     and avoids the false positives that arise from independent scanning.
@@ -56,9 +88,10 @@ def _relabel_ad_blocks(
     if grid is None or not ad_candidates:
         return segments
 
-    is_hard_cut = grid.get("is_hard_cut")
-    lum_delta   = grid.get("lum_context_delta")
-    is_speech   = grid.get("is_speech")
+    is_hard_cut   = grid.get("is_hard_cut")
+    lum_delta     = grid.get("lum_context_delta")
+    is_speech     = grid.get("is_speech")
+    burst_density = grid.get("hc_burst_density")
     T = len(grid["is_speech"])
 
     ad_windows: List[tuple] = []  # (start_sec, end_sec)
@@ -77,13 +110,35 @@ def _relabel_ad_blocks(
             ld_t  = float(lum_delta[t]) if lum_delta is not None else 0.0
             sp_t  = is_speech is not None and bool(is_speech[t])
 
-            # Primary: speech resumes at a hard cut → content has returned.
-            if hc_t and sp_t:
+            # Primary: SUSTAINED speech at a hard cut → host has resumed (Fix A).
+            # Single-second bursts inside ad voiceover no longer trigger the end.
+            if hc_t and sp_t and is_speech is not None:
+                run = sum(
+                    bool(is_speech[min(t + k, T - 1)])
+                    for k in range(_SUSTAINED_SPEECH_SEC)
+                )
+                if run >= _SUSTAINED_SPEECH_SEC:
+                    t_end = t + 1
+                    break
+
+            # Secondary: luminance flips back with magnitude ≥ threshold at a hard cut.
+            if hc_t and (ld_t * start_sign) < 0 and abs(ld_t) >= _LUM_END_THRESHOLD:
                 t_end = t + 1
                 break
 
-            # Secondary: luminance flips back with large magnitude at a hard cut.
-            if hc_t and (ld_t * start_sign) < 0 and abs(ld_t) >= _LUM_END_THRESHOLD:
+            # Tertiary: hc_burst_density drops below content level at a hard cut (Fix B).
+            # Targets burst-detected ads (e.g. UberEats) where the visual edit rhythm
+            # change is clearer than any audio signal.
+            if hc_t and burst_density is not None:
+                bd_t = float(burst_density[min(t, T - 1)])
+                if bd_t < _BURST_EXIT_THRESHOLD:
+                    t_end = t + 1
+                    break
+
+            # Quaternary: CLIP content-label rollup crosses threshold at a hard cut (Fix C).
+            # Audio-independent visual semantic signal — fires when the screen is clearly
+            # back on host/slide/screen-recording content.
+            if hc_t and _clip_content_score(t, grid, T) >= _CLIP_CONTENT_THRESHOLD:
                 t_end = t + 1
                 break
 
@@ -204,5 +259,5 @@ def export_metadata(
         ad_insertion_candidates=ad_candidates,
     )
 
-    workspace.metadata_path.write_text(metadata.model_dump_json(indent=2))
+    workspace.metadata_path.write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
     return workspace.metadata_path

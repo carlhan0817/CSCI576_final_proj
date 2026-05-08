@@ -25,8 +25,8 @@ def run_fusion(workspace: Workspace) -> Path:
     log.info("Phase 3: Fusion pipeline starting")
 
     # 0. Load Phase 1 metadata + transcript
-    meta_raw = MetaRaw.model_validate(json.loads(workspace.meta_raw_path.read_text()))
-    transcript = Transcript.model_validate(json.loads(workspace.transcript_path.read_text()))
+    meta_raw = MetaRaw.model_validate(json.loads(workspace.meta_raw_path.read_text(encoding="utf-8")))
+    transcript = Transcript.model_validate(json.loads(workspace.transcript_path.read_text(encoding="utf-8")))
     log.info("Loaded meta_raw and transcript: %.1fs duration, %d sentences",
              meta_raw.duration_sec, len(transcript.segments))
 
