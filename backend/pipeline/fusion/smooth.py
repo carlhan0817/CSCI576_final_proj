@@ -31,7 +31,8 @@ from backend.pipeline.schemas import Segment, SegmentEvidence
 MIN_SEGMENT_DURATION = 2.0          # seconds — absorb shorter into stronger neighbour
 MAX_SEG_DURATION = 300.0            # F3 — force-split segments longer than this
 CONTEXT_FILLER_MAX_SEC = 30         # F4 — max filler width eligible for relabel
-SPONSORSHIP_BRIDGE_MAX_GAP = 12.0   # bridge two sponsorship blocks across a gap
+SPONSORSHIP_BRIDGE_MAX_GAP = 6.0    # bridge two sponsorship blocks across a gap
+SPONSORSHIP_BRIDGE_CORE_AUDIO_VETO = 0.5  # mid==core_content with audio_score >= this blocks bridging
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
@@ -266,12 +267,22 @@ def bridge_sponsorship_gaps(
     out: List[Segment] = []
     i = 0
     while i < len(segments):
+        mid = segments[i + 1] if i + 2 < len(segments) else None
+        # Veto bridging when the mid segment shows continuous speech. A mid
+        # segment with audio_score >= veto threshold is acoustically core
+        # content even if a partial-coverage rule painted it sponsorship —
+        # bridging across it would re-absorb a real return-to-content gap.
+        mid_is_real_content = (
+            mid is not None
+            and mid.evidence.audio_score >= SPONSORSHIP_BRIDGE_CORE_AUDIO_VETO
+        )
         if (
             i + 2 < len(segments)
             and segments[i].label == "sponsorship"
             and segments[i + 2].label == "sponsorship"
             and segments[i + 1].label != "sponsorship"
             and (segments[i + 1].end_sec - segments[i + 1].start_sec) <= max_gap_sec
+            and not mid_is_real_content
         ):
             a, mid, b = segments[i], segments[i + 1], segments[i + 2]
             bridged_conf = min(a.confidence, b.confidence)
@@ -342,10 +353,17 @@ def smooth_pipeline(
     s = absorb_short_segments(s)
     s = propagate_context(s)
     s = merge_adjacent_same_label(s)
-    while True:
-        bridged = bridge_sponsorship_gaps(s)
-        if len(bridged) == len(s):
-            break
-        s = merge_adjacent_same_label(bridged)
+    # Skip sponsorship bridging in vlog mode: vlog content has rapid
+    # alternation between speech bursts and silent B-roll, so any "short
+    # non-sponsorship gap between two sponsorship segments" is more likely a
+    # vlog return-to-content than a single ad block to be fused.
+    from backend.pipeline.fusion.rules import _is_vlog_mode
+    skip_bridge = grid is not None and _is_vlog_mode(grid)
+    if not skip_bridge:
+        while True:
+            bridged = bridge_sponsorship_gaps(s)
+            if len(bridged) == len(s):
+                break
+            s = merge_adjacent_same_label(bridged)
     s = renumber(s)
     return s
