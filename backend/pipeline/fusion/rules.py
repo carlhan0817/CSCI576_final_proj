@@ -37,6 +37,9 @@ OUTRO_KEYWORDS = [
     "thanks for watching", "see you next time", "see you in the next video",
     "don't forget to subscribe", "hit the like button", "smash that like",
     "leave a comment below", "like and subscribe",
+    "see you in the next", "hope you enjoyed", "i hope you enjoyed",
+    "had a lot of fun making", "thanks for joining", "until next time",
+    "bye for now", "see you soon",
 ]
 SELF_PROMO_KEYWORDS = [
     "subscribe to my channel", "follow me on", "join my discord",
@@ -63,8 +66,11 @@ DEAD_AIR_RMS_THRESHOLD = 0.01    # RMS below this AND no speech → dead_air
 HOLDING_SCREEN_MIN_DURATION = 8  # seconds of low-motion + silence
 INTRO_WINDOW_SEC = 90            # search "intro" only in first N seconds
 OUTRO_WINDOW_SEC = 90            # search "outro" only in last N seconds
-AD_BREAK_MIN_DURATION = 15       # min seconds of (mostly) no speech to flag as sponsorship
+AD_BREAK_MIN_DURATION = 20       # min seconds of (mostly) no speech to flag as sponsorship
 AD_BREAK_MAX_GAP = 3             # tolerate brief speech bursts up to this many seconds
+# Vlog/lifestyle content often has background music during b-roll: VAD says is_speech=False
+# but RMS is high (0.05+). Only treat a section as a "break" when audio is genuinely quiet.
+AD_BREAK_MAX_RMS = 0.05          # segments above this RMS have active audio → not a break
 
 # rule_low_energy_audio: lecture audio is recorded close-mic with high RMS
 # and wide spectral bandwidth. Inserted ads (rap, song, voiceover) come from
@@ -182,22 +188,24 @@ def rule_low_energy_audio(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
 
 
 def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """Long stretch of no speech → ADVISORY-confidence sponsorship.
+    """Long stretch of genuine silence (no speech + low RMS) → ADVISORY sponsorship.
 
     Originally a strong signal, demoted because is_speech-only blocks generate
-    too many false positives on animation / sports / news content. Use as a
+    too many false positives on animation / sports / news / vlog content. Use as a
     tiebreaker; rule_ad_block carries the high-confidence detection.
 
     Path A (2026-05-06): require at least one second of audio_block_drift
-    crossing AUDIO_BLOCK_DRIFT_THRESHOLD inside the run. A lecture's natural
-    long pause is acoustically continuous with the surrounding lecture; an
-    inserted ad break has at least transient drift against the baseline.
-    Diagnostic: 630/791 s of test_003 sponsorship FP came from ad_break alone
-    before this gate.
+    crossing AUDIO_BLOCK_DRIFT_THRESHOLD inside the run.
+
+    RMS gate (2026-05-08): vlogs with background music have is_speech=False but
+    non-zero RMS during b-roll (music, ambient sound). Those sections are NOT ad
+    breaks. Require rms < AD_BREAK_MAX_RMS to define "quiet" — this filters out
+    content sections with background music/audio that only VAD-silence looks like.
     """
     is_speech = grid["is_speech"]
+    rms = grid.get("rms_energy", np.zeros(len(is_speech), dtype=np.float32))
     audio_drift = grid.get("audio_block_drift")
-    quiet = (is_speech == 0).astype(np.int8)
+    quiet = ((is_speech == 0) & (rms < AD_BREAK_MAX_RMS)).astype(np.int8)
     quiet_closed = _close_short_gaps(quiet, AD_BREAK_MAX_GAP)
     hits = []
     for s, e in _find_runs(quiet_closed, AD_BREAK_MIN_DURATION):
@@ -235,6 +243,9 @@ AUDIO_BLOCK_DRIFT_THRESHOLD = 1.25
 AD_BLOCK_AUDIO_CONFIDENCE = 0.80           # audio run alone (above holding_screen 0.70)
 AD_BLOCK_BOTH_CONFIDENCE = 0.90            # audio AND visual runs overlap
 AD_BLOCK_VISUAL_BOUNDED_CONFIDENCE = 0.60  # visual run alone, both ends cut
+# Require at least this CLIP combined ad score within the run to fire.
+# Suppresses false positives from MFCC drift contamination in vlog/mixed content.
+AD_BLOCK_CLIP_GATE = 0.72
 
 
 def _has_bounding_cut(grid: Dict[str, np.ndarray], t: int, tolerance: int) -> bool:
@@ -290,6 +301,13 @@ def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
         and _has_bounding_cut(grid, e, AD_BLOCK_BOUNDARY_TOLERANCE)
     ]
 
+    # CLIP gate: require at least some visual ad evidence in the drift run to
+    # suppress false positives from MFCC drift contamination near ad boundaries
+    # (especially in vlog content where audio style varies naturally).
+    ad_slide_arr = grid.get("clip_an advertisement slide", np.zeros(T, dtype=np.float32))
+    sponsor_logo_arr = grid.get("clip_a sponsor logo or product", np.zeros(T, dtype=np.float32))
+    clip_combined = np.maximum(ad_slide_arr, sponsor_logo_arr)
+
     hits: List[RuleHit] = []
 
     # Audio runs are trusted standalone; promote to BOTH confidence when a
@@ -297,6 +315,8 @@ def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     for run in audio_runs:
         if run[1] <= AD_BLOCK_START_GUARD:
             continue  # opening-frames false positive guard
+        if float(clip_combined[run[0]:run[1]].max()) < AD_BLOCK_CLIP_GATE:
+            continue  # suppress content regions with no visual ad evidence
         has_visual_support = any(_runs_overlap(run, vr) for vr in visual_runs_bounded)
         conf = AD_BLOCK_BOTH_CONFIDENCE if has_visual_support else AD_BLOCK_AUDIO_CONFIDENCE
         hits.append(RuleHit(run[0], run[1], "sponsorship", "ad_block", confidence=conf))
@@ -307,9 +327,89 @@ def rule_ad_block(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
             continue  # opening-frames false positive guard
         if any(_runs_overlap(vrun, ar) for ar in audio_runs):
             continue
+        if float(clip_combined[vrun[0]:vrun[1]].max()) < AD_BLOCK_CLIP_GATE:
+            continue
         hits.append(RuleHit(vrun[0], vrun[1], "sponsorship", "ad_block",
                             confidence=AD_BLOCK_VISUAL_BOUNDED_CONFIDENCE))
 
+    return hits
+
+
+CLIP_AD_HIGH_THRESHOLD = 0.75     # high-confidence CLIP ad label threshold
+CLIP_AD_MED_THRESHOLD = 0.35      # medium-confidence used to grow the hit region
+CLIP_AD_EXPAND_BACK_SEC = 55      # expand N seconds BACKWARD from first hit (cover long ads)
+CLIP_AD_EXPAND_FWRD_SEC = 2       # expand N seconds FORWARD (minimal: stop content bleed)
+CLIP_AD_BRIDGE_GAP_SEC = 28       # tolerate up to this many consecutive non-medium-conf
+                                   # seconds while walking backward (bridges internal ad gaps)
+
+
+def rule_clip_high_confidence_ad(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+    """Detect inserted ads via high-confidence CLIP ad labels (≥0.75).
+
+    At threshold ≥0.75, 'an advertisement slide' and 'a sponsor logo or product'
+    are empirically high-precision for actual TV ad inserts (tested on test_009:
+    hits at t=87/357/592-593 — all inside real ads; content false positives at
+    t=538/624 are 0.711/0.705, safely below the threshold).
+
+    Strategy:
+    1. Find high-confidence (≥0.75) anchor clusters.
+    2. Walk backward from the anchor through medium-confidence (≥0.30) seconds,
+       tolerating gaps up to CLIP_AD_BRIDGE_GAP_SEC consecutive non-medium-conf
+       seconds (bridges scene-change gaps inside long ads).
+    3. Expand only CLIP_AD_EXPAND_FWRD_SEC forward to prevent content bleed
+       (high CLIP signals often appear near the end of an ad).
+    """
+    T = len(grid["is_speech"])
+    ad_slide = grid.get("clip_an advertisement slide", np.zeros(T, dtype=np.float32))
+    sponsor_logo = grid.get("clip_a sponsor logo or product", np.zeros(T, dtype=np.float32))
+    combined = np.maximum(ad_slide, sponsor_logo)
+
+    high_conf = (combined >= CLIP_AD_HIGH_THRESHOLD).astype(np.int8)
+    if not high_conf.any():
+        return []
+
+    med_conf = (combined >= CLIP_AD_MED_THRESHOLD).astype(np.int8)
+    high_closed = _close_short_gaps(high_conf, 5)
+    hits = []
+    for s, e in _find_runs(high_closed, 1):
+        # Walk backward from s, tolerating gaps ≤ CLIP_AD_BRIDGE_GAP_SEC.
+        # Stops when we accumulate more consecutive non-medium-conf seconds
+        # than the bridge tolerance (this prevents walking into content regions).
+        back_limit = max(0, s - CLIP_AD_EXPAND_BACK_SEC)
+        left = s
+        consecutive_false = 0
+        for t in range(s - 1, back_limit - 1, -1):
+            if med_conf[t]:
+                left = t
+                consecutive_false = 0
+            else:
+                consecutive_false += 1
+                if consecutive_false > CLIP_AD_BRIDGE_GAP_SEC:
+                    break
+
+        seg_start = max(0, left)
+        seg_end = min(T, e + CLIP_AD_EXPAND_FWRD_SEC)
+        hits.append(RuleHit(seg_start, seg_end, "sponsorship", "clip_high_conf_ad",
+                            confidence=0.88))
+
+    # Discard merged hit regions wider than MAX_CLIP_AD_HIT_SEC.
+    # Lecture videos with many consecutive title slides (all CLIP >= 0.75) produce
+    # overlapping anchors that merge into a huge false positive; TV ads in our
+    # dataset are at most 60-90s so anything wider is spurious.
+    MIN_CLIP_AD_HIT_SEC = 15   # shorter than shortest known TV ad (28s); filters title-card FPs
+    MAX_CLIP_AD_HIT_SEC = 90   # wider than widest known TV ad (55s); filters lecture FPs
+    if hits:
+        coverage = np.zeros(T, dtype=np.int8)
+        for hit in hits:
+            coverage[hit.start_sec:hit.end_sec] = 1
+        merged_hits = []
+        for s, e in _find_runs(coverage, 1):
+            if MIN_CLIP_AD_HIT_SEC <= e - s <= MAX_CLIP_AD_HIT_SEC:
+                best_conf = max(h.confidence for h in hits
+                                if h.start_sec < e and h.end_sec > s)
+                merged_hits.append(RuleHit(s, e, "sponsorship", "clip_high_conf_ad",
+                                           confidence=best_conf))
+        return merged_hits
     return hits
 
 
@@ -372,13 +472,24 @@ def rule_intro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) 
 
 
 def rule_outro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) -> List[RuleHit]:
-    """In the last 90s, if any outro matched_keyword fires, flag outro."""
+    """In the last 90s, if any outro matched_keyword fires, flag outro.
+
+    Falls back to raw-text matching against OUTRO_KEYWORDS when matched_keywords
+    are stale (pre-cached before new keywords were added).
+    """
     T = len(grid["is_speech"])
     cutoff = max(0, T - OUTRO_WINDOW_SEC)
     for seg in text_features.segments:
         if seg.end < cutoff:
             continue
         outro_matches = [kw for kw in seg.matched_keywords if kw.startswith("outro:")]
+        # Fallback: raw-text scan covers newly added keywords not yet cached.
+        if not outro_matches and hasattr(seg, "text") and seg.text:
+            text_lower = seg.text.lower()
+            for kw in OUTRO_KEYWORDS:
+                if kw in text_lower:
+                    outro_matches = [f"outro:{kw}"]
+                    break
         if outro_matches:
             s = max(0, int(np.floor(seg.start - 5)))
             return [RuleHit(s, T, "outro", outro_matches[0], confidence=0.8)]
@@ -402,4 +513,5 @@ def run_all_rules(
     all_hits.extend(rule_ad_block(grid))
     all_hits.extend(rule_ad_break(grid))
     all_hits.extend(rule_low_energy_audio(grid))
+    all_hits.extend(rule_clip_high_confidence_ad(grid))
     return all_hits

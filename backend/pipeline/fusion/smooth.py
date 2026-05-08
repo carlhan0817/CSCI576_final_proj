@@ -31,7 +31,8 @@ from backend.pipeline.schemas import Segment, SegmentEvidence
 MIN_SEGMENT_DURATION = 2.0          # seconds — absorb shorter into stronger neighbour
 MAX_SEG_DURATION = 300.0            # F3 — force-split segments longer than this
 CONTEXT_FILLER_MAX_SEC = 30         # F4 — max filler width eligible for relabel
-SPONSORSHIP_BRIDGE_MAX_GAP = 12.0   # bridge two sponsorship blocks across a gap
+SPONSORSHIP_BRIDGE_MAX_GAP = 8.0    # bridge two sponsorship blocks across a gap
+MAX_BRIDGE_RESULT_SEC = 90.0        # don't bridge if the resulting segment would exceed this
 # Hard-cut protection is for preserving meaningful scene boundaries *inside* a
 # long same-label run (e.g. two distinct ad blocks that happen to be adjacent).
 # A hard cut before a very short segment is editorial pacing, not a content
@@ -272,12 +273,16 @@ def bridge_sponsorship_gaps(
     out: List[Segment] = []
     i = 0
     while i < len(segments):
+        a_seg = segments[i]
+        b_seg = segments[i + 2] if i + 2 < len(segments) else None
+        _would_be_dur = (b_seg.end_sec - a_seg.start_sec) if b_seg is not None else 0
         if (
             i + 2 < len(segments)
             and segments[i].label == "sponsorship"
             and segments[i + 2].label == "sponsorship"
             and segments[i + 1].label != "sponsorship"
             and (segments[i + 1].end_sec - segments[i + 1].start_sec) <= max_gap_sec
+            and _would_be_dur <= MAX_BRIDGE_RESULT_SEC
         ):
             a, mid, b = segments[i], segments[i + 1], segments[i + 2]
             bridged_conf = min(a.confidence, b.confidence)

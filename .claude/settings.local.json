@@ -25,7 +25,10 @@
       "Bash(uv --version)",
       "Bash(uv pip *)",
       "Bash(python -m backend.pipeline.fusion.run workspace/test_002_2/test_002_2.mp4)",
-      "Bash(xargs ls)"
+      "Bash(xargs ls)",
+      "Bash(python -m backend.pipeline.fusion.run videos/test_009.mp4)",
+      "Bash(python -m backend.pipeline.fusion.main --video workspace/test_009/video.mp4 --workspace workspace/test_009)",
+      "Bash(python -m backend.eval.score_test test_009)"
     ]
   }
 }
