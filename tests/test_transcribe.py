@@ -1,10 +1,11 @@
 import json
 from types import SimpleNamespace
+
 import pytest
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import Transcript
 from backend.pipeline import transcribe as transcribe_mod
+from backend.pipeline.schemas import Transcript
+from backend.pipeline.workspace import Workspace
 
 
 def _fake_segment(id_, start, end, text):

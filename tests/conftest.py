@@ -1,15 +1,13 @@
 import subprocess
 import wave
 from pathlib import Path
-import pytest
-import cv2
-import numpy as np
-import imageio_ffmpeg
 
-from backend.pipeline.workspace import Workspace
+import imageio_ffmpeg
+import pytest
+
 from backend.pipeline.audio import extract_audio as phase1_extract_audio
 from backend.pipeline.frames import sample_frames
-
+from backend.pipeline.workspace import Workspace
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 

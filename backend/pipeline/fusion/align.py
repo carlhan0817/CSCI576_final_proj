@@ -6,20 +6,20 @@ text @ sentence-level) onto a unified per-second grid. Output is a numpy array w
 each row = one second, columns = aggregated features from all three modalities.
 """
 from __future__ import annotations
+
 import json
+
 import numpy as np
-from pathlib import Path
-from typing import Dict, List, Tuple
 
 from backend.pipeline.schemas import (
     AudioFeatures,
-    VisualFeatures,
     TextFeatures,
+    VisualFeatures,
 )
 from backend.pipeline.workspace import Workspace
 
 
-def load_phase2_features(workspace: Workspace) -> Tuple[VisualFeatures, AudioFeatures, TextFeatures]:
+def load_phase2_features(workspace: Workspace) -> tuple[VisualFeatures, AudioFeatures, TextFeatures]:
     """Read the three Phase 2 JSON artifacts."""
     with open(workspace.visual_features_path) as f:
         visual = VisualFeatures.model_validate(json.load(f))
@@ -35,7 +35,7 @@ def build_per_second_grid(
     audio: AudioFeatures,
     text: TextFeatures,
     duration_sec: float,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Build a per-second feature grid covering [0, duration_sec).
     
@@ -49,7 +49,7 @@ def build_per_second_grid(
       - text_sentence_id[t]   : id of transcript segment overlapping second t (-1 if none)
     """
     T = int(np.ceil(duration_sec))
-    grid: Dict[str, np.ndarray] = {}
+    grid: dict[str, np.ndarray] = {}
 
     # --- Audio: per-second grid (one segment per second in new schema)
     is_speech = np.zeros(T, dtype=np.int8)
@@ -86,7 +86,7 @@ def build_per_second_grid(
     
     # Collect all CLIP labels (assumes all frames share the same label set)
     clip_labels = list(visual.frames[0].clip_labels.keys()) if visual.frames else []
-    clip_per_label: Dict[str, np.ndarray] = {
+    clip_per_label: dict[str, np.ndarray] = {
         lbl: np.zeros(T, dtype=np.float32) for lbl in clip_labels
     }
     

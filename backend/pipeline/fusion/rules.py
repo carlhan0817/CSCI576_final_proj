@@ -6,9 +6,10 @@ High-confidence rules that don't need ML. Each rule outputs a per-second
 second; we collect all and let classify.py weigh them.
 """
 from __future__ import annotations
-import numpy as np
-from typing import Dict, List, Tuple
+
 from dataclasses import dataclass
+
+import numpy as np
 
 from backend.pipeline.schemas import TextFeatures
 
@@ -78,7 +79,7 @@ def _close_short_gaps(arr: np.ndarray, max_gap: int) -> np.ndarray:
     return out
 
 
-def _find_runs(arr: np.ndarray, min_length: int) -> List[Tuple[int, int]]:
+def _find_runs(arr: np.ndarray, min_length: int) -> list[tuple[int, int]]:
     """Return [(start, end), ...] of consecutive 1-runs in a binary array, length >= min_length."""
     runs = []
     n = len(arr)
@@ -96,7 +97,7 @@ def _find_runs(arr: np.ndarray, min_length: int) -> List[Tuple[int, int]]:
     return runs
 
 
-def rule_dead_air(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+def rule_dead_air(grid: dict[str, np.ndarray]) -> list[RuleHit]:
     """Long low-energy silence (no speech AND rms below threshold) → dead_air."""
     is_speech = grid["is_speech"]
     rms = grid.get("rms_energy", np.zeros(len(is_speech), dtype=np.float32))
@@ -107,7 +108,7 @@ def rule_dead_air(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     return hits
 
 
-def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+def rule_ad_break(grid: dict[str, np.ndarray]) -> list[RuleHit]:
     """Long stretch of no speech (allowing brief bursts) → high-confidence sponsorship.
 
     Targets ad inserts that don't trip our keyword list because the host's voice
@@ -122,7 +123,7 @@ def rule_ad_break(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     return hits
 
 
-def rule_holding_screen(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+def rule_holding_screen(grid: dict[str, np.ndarray]) -> list[RuleHit]:
     """Low visual motion + no speech for a long time → likely holding/title screen."""
     hist_diff = grid["hist_diff"]
     is_speech = grid["is_speech"]
@@ -133,7 +134,7 @@ def rule_holding_screen(grid: Dict[str, np.ndarray]) -> List[RuleHit]:
     return hits
 
 
-def rule_sponsor_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
+def rule_sponsor_keyword(text_features: TextFeatures, T: int) -> list[RuleHit]:
     """Sentences with sponsor matched_keywords → sponsorship candidates (extends ±15s)."""
     hits = []
     for seg in text_features.segments:
@@ -145,7 +146,7 @@ def rule_sponsor_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
     return hits
 
 
-def rule_self_promo_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
+def rule_self_promo_keyword(text_features: TextFeatures, T: int) -> list[RuleHit]:
     hits = []
     for seg in text_features.segments:
         promo_matches = [kw for kw in seg.matched_keywords if kw.startswith("self_promo:")]
@@ -156,7 +157,7 @@ def rule_self_promo_keyword(text_features: TextFeatures, T: int) -> List[RuleHit
     return hits
 
 
-def rule_recap_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
+def rule_recap_keyword(text_features: TextFeatures, T: int) -> list[RuleHit]:
     hits = []
     for seg in text_features.segments:
         recap_matches = [kw for kw in seg.matched_keywords if kw.startswith("recap:")]
@@ -167,7 +168,7 @@ def rule_recap_keyword(text_features: TextFeatures, T: int) -> List[RuleHit]:
     return hits
 
 
-def rule_intro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+def rule_intro_window(text_features: TextFeatures, grid: dict[str, np.ndarray]) -> list[RuleHit]:
     """In the first 90s, if any intro matched_keyword fires, flag intro."""
     T = len(grid["is_speech"])
     for seg in text_features.segments:
@@ -180,7 +181,7 @@ def rule_intro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) 
     return []
 
 
-def rule_outro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) -> List[RuleHit]:
+def rule_outro_window(text_features: TextFeatures, grid: dict[str, np.ndarray]) -> list[RuleHit]:
     """In the last 90s, if any outro matched_keyword fires, flag outro."""
     T = len(grid["is_speech"])
     cutoff = max(0, T - OUTRO_WINDOW_SEC)
@@ -195,12 +196,12 @@ def rule_outro_window(text_features: TextFeatures, grid: Dict[str, np.ndarray]) 
 
 
 def run_all_rules(
-    grid: Dict[str, np.ndarray],
+    grid: dict[str, np.ndarray],
     text_features: TextFeatures,
-) -> List[RuleHit]:
+) -> list[RuleHit]:
     """Run every rule, return all hits (overlaps OK; classify.py resolves them)."""
     T = len(grid["is_speech"])
-    all_hits: List[RuleHit] = []
+    all_hits: list[RuleHit] = []
     all_hits.extend(rule_dead_air(grid))
     all_hits.extend(rule_holding_screen(grid))
     all_hits.extend(rule_sponsor_keyword(text_features, T))

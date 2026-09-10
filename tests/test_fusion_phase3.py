@@ -1,33 +1,30 @@
 """Phase 3 fusion pipeline tests — covers all 4 fixes from phase3-fixes.md."""
 from __future__ import annotations
+
 import numpy as np
 import pytest
-from typing import Dict
 
+from backend.pipeline.fusion.boundaries import find_boundaries
 from backend.pipeline.fusion.classify import (
     CLIP_LABEL_TO_SEGMENT,
     _classify_by_clip_and_audio,
-    _resolve_rule_label_for_segment,
 )
 from backend.pipeline.fusion.rules import (
-    RuleHit,
     DEAD_AIR_RMS_THRESHOLD,
     rule_dead_air,
-    rule_sponsor_keyword,
-    rule_self_promo_keyword,
-    rule_recap_keyword,
     rule_intro_window,
     rule_outro_window,
+    rule_recap_keyword,
+    rule_self_promo_keyword,
+    rule_sponsor_keyword,
 )
-from backend.pipeline.fusion.boundaries import find_boundaries
 from backend.pipeline.schemas import TextFeatures, TextFeatureSegment
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _make_grid(T: int, **overrides) -> Dict[str, np.ndarray]:
+def _make_grid(T: int, **overrides) -> dict[str, np.ndarray]:
     """Minimal valid grid of length T; override any column via kwargs."""
-    grid: Dict[str, np.ndarray] = {
+    grid: dict[str, np.ndarray] = {
         "is_speech":    np.zeros(T, dtype=np.int8),
         "is_hard_cut":  np.zeros(T, dtype=np.int8),
         "hist_diff":    np.zeros(T, dtype=np.float32),
@@ -79,7 +76,7 @@ class TestClipLabelMap:
     def test_end_credits_not_core_content(self):
         # Previously fell through to core_content default — regression guard.
         T = 10
-        grid = _make_grid(T, **{"clip_end credits": np.ones(T, dtype=np.float32)})
+        _make_grid(T, **{"clip_end credits": np.ones(T, dtype=np.float32)})
         # Force all other clip keys to zero
         label, _, _ = _classify_by_clip_and_audio(
             {"clip_end credits": 0.95, "is_speech": 0.0, "has_text": 0.0}
@@ -165,7 +162,7 @@ class TestRuleDeadAir:
 # ── Fix 3: boundaries — Signal 5 adds music-transition candidates ─────────────
 
 class TestBoundariesMusicSignal:
-    def _minimal_grid(self, T: int) -> Dict[str, np.ndarray]:
+    def _minimal_grid(self, T: int) -> dict[str, np.ndarray]:
         return _make_grid(T)
 
     def test_music_flip_adds_boundary(self):

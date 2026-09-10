@@ -1,15 +1,15 @@
 from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.logging_setup import get_logger
-from backend.pipeline import probe as probe_stage
 from backend.pipeline import audio as audio_stage
 from backend.pipeline import frames as frames_stage
+from backend.pipeline import probe as probe_stage
 from backend.pipeline import transcribe as transcribe_stage
-
+from backend.pipeline.logging_setup import get_logger
+from backend.pipeline.workspace import Workspace
 
 DEFAULT_WORKSPACE_ROOT = Path(__file__).resolve().parents[2] / "workspace"
 

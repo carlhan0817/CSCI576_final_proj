@@ -3,13 +3,11 @@ Tests for backend/pipeline/fusion/boundaries.py (Phase 3: boundary candidate
 generation).
 """
 from __future__ import annotations
+
 import numpy as np
 import pytest
 
 from backend.pipeline.fusion.boundaries import (
-    HIST_DIFF_THRESHOLD,
-    CLIP_KL_THRESHOLD,
-    TEXT_SIM_THRESHOLD,
     MIN_BOUNDARY_GAP_SEC,
     _kl_divergence,
     find_boundaries,
@@ -94,7 +92,7 @@ class TestFindBoundaries:
         clip_b[:15] = 0.05
         clip_a[15:] = 0.05
         clip_b[15:] = 0.95
-        grid = _grid(T, **{"clip_label_a": clip_a, "clip_label_b": clip_b})
+        grid = _grid(T, clip_label_a=clip_a, clip_label_b=clip_b)
         boundaries = find_boundaries(grid)
         assert any(abs(b - 15) <= MIN_BOUNDARY_GAP_SEC for b in boundaries)
 

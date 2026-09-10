@@ -5,23 +5,23 @@ Happy cases: correct feature values on synthetic frames.
 Sad cases: empty frames_cache, corrupt image, single frame.
 """
 from __future__ import annotations
+
 import json
-import cv2
-import numpy as np
-import pytest
 from pathlib import Path
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import VisualFeatures
+import numpy as np
+import pytest
+
 from backend.pipeline.features.visual import (
     SCENE_LABELS,
-    _detect_black_frame,
-    _compute_motion_intensity,
     _compute_chroma_diff,
     _compute_dct_hf_energy,
+    _compute_motion_intensity,
+    _detect_black_frame,
     extract_visual_features,
 )
-
+from backend.pipeline.schemas import VisualFeatures
+from backend.pipeline.workspace import Workspace
 
 # ── Unit tests for helper functions (no model needed) ────────────────────────
 
@@ -44,6 +44,9 @@ class TestDetectBlackFrame:
         assert is_black is False
 
     def test_near_black_high_variance_not_flagged(self):
+        rng = np.random.default_rng(0)
+        gray = rng.integers(0, 60, (100, 100), dtype=np.uint8)
+        _, _, is_black = _detect_black_frame(gray)
         assert is_black is False
 
 
@@ -210,7 +213,7 @@ class TestExtractVisualFeatures:
         for f in phase1_workspace.frames_dir.glob("frame_*.jpg"):
             shutil.copy(f, ws2.frames_dir / f.name)
         # Overwrite one frame with garbage bytes
-        bad = sorted(ws2.frames_dir.glob("frame_*.jpg"))[0]
+        bad = min(ws2.frames_dir.glob("frame_*.jpg"))
         bad.write_bytes(b"\xff\xd8garbage")
 
         out = extract_visual_features(ws2, device="cpu")

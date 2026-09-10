@@ -5,18 +5,20 @@ Happy cases: keyword detection, boundary detection, embedding persistence.
 Sad cases: empty transcript, single segment, missing transcript file.
 """
 from __future__ import annotations
+
 import json
-import numpy as np
-import pytest
 from pathlib import Path
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import Transcript, TranscriptSegment, TextFeatures
+import numpy as np
+import pytest
+
 from backend.pipeline.features.text import (
+    DEFAULT_SIMILARITY_THRESHOLD,
     _match_keywords,
     extract_text_features,
-    DEFAULT_SIMILARITY_THRESHOLD,
 )
+from backend.pipeline.schemas import TextFeatures, Transcript, TranscriptSegment
+from backend.pipeline.workspace import Workspace
 
 
 def _make_transcript(segments: list[dict], tmp_path: Path) -> Workspace:

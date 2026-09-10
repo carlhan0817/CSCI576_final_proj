@@ -6,9 +6,8 @@ text topic shifts, audio speech-music transitions. These become the candidate
 segment boundaries.
 """
 from __future__ import annotations
-import numpy as np
-from typing import Dict, List
 
+import numpy as np
 
 # Tunable thresholds
 HIST_DIFF_THRESHOLD = 0.4
@@ -27,7 +26,7 @@ def _kl_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-9) -> float:
     return float(0.5 * (np.sum(p * np.log(p / q)) + np.sum(q * np.log(q / p))))
 
 
-def find_boundaries(grid: Dict[str, np.ndarray]) -> List[int]:
+def find_boundaries(grid: dict[str, np.ndarray]) -> list[int]:
     """
     Return a sorted list of boundary timestamps (in seconds).
     Always includes 0 and T-1 as the ends.
@@ -43,7 +42,7 @@ def find_boundaries(grid: Dict[str, np.ndarray]) -> List[int]:
             candidate_seconds.add(t)
 
     # Signal 2: CLIP scene probability shifts (KL divergence between adjacent seconds)
-    clip_keys = sorted([k for k in grid.keys() if k.startswith("clip_")])
+    clip_keys = sorted([k for k in grid if k.startswith("clip_")])
     if clip_keys:
         clip_matrix = np.stack([grid[k] for k in clip_keys], axis=1)  # (T, n_labels)
         for t in range(1, T):

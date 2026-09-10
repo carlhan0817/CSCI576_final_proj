@@ -1,6 +1,8 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Dict, List, Literal, Optional
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AudioFeatureSegment(BaseModel):
@@ -19,7 +21,7 @@ class AudioFeatureSegment(BaseModel):
 
 class AudioFeatures(BaseModel):
     model_used: str = "silero_vad+librosa"
-    segments: List[AudioFeatureSegment]
+    segments: list[AudioFeatureSegment]
 
 
 class VisualFrameFeature(BaseModel):
@@ -27,7 +29,7 @@ class VisualFrameFeature(BaseModel):
     timestamp_sec: float = Field(..., ge=0.0)
     hist_diff_to_previous: float = Field(0.0, description="HSV histogram correlation distance from the previous frame.")
     is_hard_cut: bool = Field(False, description="True if hist_diff exceeds the cut threshold.")
-    clip_labels: Dict[str, float] = Field(default_factory=dict, description="Zero-shot CLIP probabilities per scene prompt.")
+    clip_labels: dict[str, float] = Field(default_factory=dict, description="Zero-shot CLIP probabilities per scene prompt.")
     mean_luminance: float = Field(0.0, ge=0.0, description="Mean pixel brightness in [0, 255] (grayscale).")
     luminance_variance: float = Field(0.0, ge=0.0, description="Variance of pixel brightness.")
     is_black_frame: bool = Field(False, description="True if mean_luminance < 10 and luminance_variance < 50.")
@@ -38,7 +40,7 @@ class VisualFrameFeature(BaseModel):
 
 class VisualFeatures(BaseModel):
     model_used: str = "openai/clip-vit-base-patch32"
-    frames: List[VisualFrameFeature]
+    frames: list[VisualFrameFeature]
 
 
 class TextFeatureSegment(BaseModel):
@@ -46,9 +48,9 @@ class TextFeatureSegment(BaseModel):
     start: float = Field(..., ge=0.0)
     end: float = Field(..., ge=0.0)
     text: str
-    similarity_to_next: Optional[float] = Field(None, description="Cosine similarity to the next segment. None for the last.")
+    similarity_to_next: float | None = Field(None, description="Cosine similarity to the next segment. None for the last.")
     is_potential_boundary: bool = Field(False, description="True if similarity_to_next is below threshold.")
-    matched_keywords: List[str] = Field(
+    matched_keywords: list[str] = Field(
         default_factory=list,
         description="Keyword group matches found in this segment's text (e.g. 'sponsor:sponsored by')."
     )
@@ -56,7 +58,7 @@ class TextFeatureSegment(BaseModel):
 
 class TextFeatures(BaseModel):
     model_used: str = "all-MiniLM-L6-v2"
-    segments: List[TextFeatureSegment]
+    segments: list[TextFeatureSegment]
 
 
 class MetaRaw(BaseModel):
@@ -113,7 +115,7 @@ class SegmentEvidence(BaseModel):
     visual_score: float = Field(0.0, description="Visual modality contribution to chosen label.")
     audio_score: float = Field(0.0, description="Audio modality contribution.")
     text_score: float = Field(0.0, description="Text modality contribution.")
-    triggered_rules: List[str] = Field(default_factory=list, description="Hard-rule names that fired in this segment.")
+    triggered_rules: list[str] = Field(default_factory=list, description="Hard-rule names that fired in this segment.")
 
 
 class Segment(BaseModel):
@@ -150,6 +152,6 @@ class VideoInfo(BaseModel):
 class Metadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
     video_info: VideoInfo
-    segments: List[Segment]
-    chapters: List[Chapter]
-    skip_suggestions: List[int] = Field(default_factory=list, description="segment_ids that should be skipped")
+    segments: list[Segment]
+    chapters: list[Chapter]
+    skip_suggestions: list[int] = Field(default_factory=list, description="segment_ids that should be skipped")

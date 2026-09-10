@@ -31,25 +31,25 @@ The output is a single ``metadata.json`` written under the workspace root and
 already conforming to ``§2.2`` of the PDD.
 """
 from __future__ import annotations
+
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence
 
 import numpy as np
 from pydantic import ValidationError
 
 from backend.pipeline.schemas import (
-    MetaRaw,
-    Metadata,
-    VideoInfo,
-    Segment,
     Chapter,
+    Metadata,
+    MetaRaw,
+    Segment,
     Transcript,
     TranscriptSegment,
+    VideoInfo,
 )
 from backend.pipeline.workspace import Workspace
-
 
 # Bumped to 0.4.0 for the Phase 4 export contract:
 # - real semantic chapter titles
@@ -69,13 +69,13 @@ def _sentences_in_window(
     transcript_segments: Sequence[TranscriptSegment],
     start_sec: float,
     end_sec: float,
-) -> List[TranscriptSegment]:
+) -> list[TranscriptSegment]:
     """
     Return every transcript sentence whose [start, end] interval intersects
     [start_sec, end_sec). We use intersection rather than full containment so
     sentences spanning the boundary aren't dropped.
     """
-    out: List[TranscriptSegment] = []
+    out: list[TranscriptSegment] = []
     for s in transcript_segments:
         if s.end <= start_sec or s.start >= end_sec:
             continue
@@ -85,7 +85,7 @@ def _sentences_in_window(
 
 def _pick_representative_sentence(
     sentences: Sequence[TranscriptSegment],
-    embeddings: Optional[np.ndarray],
+    embeddings: np.ndarray | None,
     max_chars: int = 200,
 ) -> str:
     """
@@ -130,7 +130,7 @@ def _pick_representative_sentence(
     return longest.text.strip()[:max_chars]
 
 
-def _load_embeddings(workspace: Workspace) -> Optional[np.ndarray]:
+def _load_embeddings(workspace: Workspace) -> np.ndarray | None:
     """
     Try to load the cached MiniLM sentence embeddings from Phase 2.
     Returns None if the file is missing or unreadable so the caller can fall
@@ -151,7 +151,7 @@ def _load_embeddings(workspace: Workspace) -> Optional[np.ndarray]:
         return None
 
 
-def _load_transcript(workspace: Workspace) -> List[TranscriptSegment]:
+def _load_transcript(workspace: Workspace) -> list[TranscriptSegment]:
     path = workspace.transcript_path
     if not path.exists():
         log.warning("Transcript missing at %s; segment summaries will be empty.", path)
@@ -165,17 +165,17 @@ def _load_transcript(workspace: Workspace) -> List[TranscriptSegment]:
 # ---------------------------------------------------------------------------
 
 def attach_summaries(
-    segments: List[Segment],
+    segments: list[Segment],
     transcript_segments: Sequence[TranscriptSegment],
-    embeddings: Optional[np.ndarray],
-) -> List[Segment]:
+    embeddings: np.ndarray | None,
+) -> list[Segment]:
     """
     Replace each segment's ``summary`` with a representative sentence picked
     via embedding-centroid similarity (or longest-sentence fallback).
 
     A new list is returned; the input is not mutated.
     """
-    out: List[Segment] = []
+    out: list[Segment] = []
     for seg in segments:
         sents = _sentences_in_window(transcript_segments, seg.start_sec, seg.end_sec)
         summary = _pick_representative_sentence(sents, embeddings)
@@ -199,7 +199,7 @@ def attach_summaries(
 def _make_chapter_title(
     chapter_index: int,
     sentences: Sequence[TranscriptSegment],
-    embeddings: Optional[np.ndarray],
+    embeddings: np.ndarray | None,
 ) -> str:
     """Build a human-readable chapter title."""
     if not sentences:
@@ -216,8 +216,8 @@ def _make_chapter_title(
 def build_chapters(
     segments: Sequence[Segment],
     transcript_segments: Sequence[TranscriptSegment],
-    embeddings: Optional[np.ndarray],
-) -> List[Chapter]:
+    embeddings: np.ndarray | None,
+) -> list[Chapter]:
     """
     Group consecutive ``core_content`` segments into chapters and assign each
     a representative-sentence title.
@@ -225,10 +225,10 @@ def build_chapters(
     Two adjacent core_content segments → one chapter spanning both.
     A non-core_content segment → ends the current chapter (if any).
     """
-    chapters: List[Chapter] = []
+    chapters: list[Chapter] = []
     chapter_id = 0
-    current_start: Optional[float] = None
-    current_end: Optional[float] = None
+    current_start: float | None = None
+    current_end: float | None = None
 
     def _flush() -> None:
         nonlocal chapter_id, current_start, current_end
@@ -262,7 +262,7 @@ def build_chapters(
 # Sub-task 3: skip suggestions
 # ---------------------------------------------------------------------------
 
-def build_skip_suggestions(segments: Sequence[Segment]) -> List[int]:
+def build_skip_suggestions(segments: Sequence[Segment]) -> list[int]:
     """All non-core_content segment_ids, in order."""
     return [s.segment_id for s in segments if s.label != "core_content"]
 
@@ -275,7 +275,7 @@ def build_metadata(
     meta_raw: MetaRaw,
     segments: Sequence[Segment],
     transcript_segments: Sequence[TranscriptSegment],
-    embeddings: Optional[np.ndarray],
+    embeddings: np.ndarray | None,
     *,
     analysis_version: str = ANALYSIS_VERSION,
     verified_by_human: bool = False,

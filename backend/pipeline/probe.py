@@ -1,6 +1,8 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from pathlib import Path
+
 import imageio_ffmpeg
 
 from backend.pipeline.schemas import MetaRaw
@@ -26,7 +28,7 @@ def probe_video(mp4_path: Path, workspace: Workspace) -> MetaRaw:
         video_codec=info["codec"],
         audio_codec=audio_codec,
         has_audio=has_audio,
-        ingested_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        ingested_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     workspace.meta_raw_path.write_text(meta.model_dump_json(indent=2))
     return meta

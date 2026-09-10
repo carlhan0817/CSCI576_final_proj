@@ -1,5 +1,6 @@
 """FastAPI router for player endpoints."""
 from __future__ import annotations
+
 import logging
 import os
 import re
@@ -7,14 +8,12 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ValidationError
 
 from backend.pipeline.schemas import Metadata
 from backend.server.config import ServerConfig
-
 
 _log = logging.getLogger(__name__)
 
@@ -192,10 +191,10 @@ def get_job(job_id: str, request: Request) -> dict:
     return snapshot
 
 
-@router.get("/videos", response_model=List[VideoSummary])
-def list_videos(request: Request) -> List[VideoSummary]:
+@router.get("/videos", response_model=list[VideoSummary])
+def list_videos(request: Request) -> list[VideoSummary]:
     cfg = _config(request)
-    out: List[VideoSummary] = []
+    out: list[VideoSummary] = []
     if not cfg.videos_root.exists():
         return out
     for mp4 in sorted(cfg.videos_root.glob("*.mp4")):

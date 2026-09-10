@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,7 +10,7 @@ class Workspace:
     root: Path
 
     @classmethod
-    def for_video(cls, video: Path, root: Path) -> "Workspace":
+    def for_video(cls, video: Path, root: Path) -> Workspace:
         stem = video.stem
         return cls(source_video=video, root=root / stem)
 

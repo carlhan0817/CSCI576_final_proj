@@ -1,6 +1,7 @@
 import cv2
-from backend.pipeline.workspace import Workspace
+
 from backend.pipeline.frames import sample_frames
+from backend.pipeline.workspace import Workspace
 
 
 def test_sample_frames_writes_one_jpeg_per_second(tmp_path, synthetic_mp4):

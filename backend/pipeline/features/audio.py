@@ -1,13 +1,14 @@
 from __future__ import annotations
-import numpy as np
-from pathlib import Path
-from typing import List
-import torch
-import librosa
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import AudioFeatures, AudioFeatureSegment
+from pathlib import Path
+
+import librosa
+import numpy as np
+import torch
+
 from backend.pipeline.logging_setup import get_logger
+from backend.pipeline.schemas import AudioFeatures, AudioFeatureSegment
+from backend.pipeline.workspace import Workspace
 
 # ── Classification thresholds ─────────────────────────────────────────────────
 SILENCE_RMS_THRESHOLD = 0.001   # RMS below this → silence
@@ -144,7 +145,7 @@ def extract_audio_features(workspace: Workspace, device: str = "cpu") -> Path:
 
     # ── Per-second spectral features ──────────────────────────────────────────
     log.info("Stage 2 (Audio): Computing per-second spectral features...")
-    segments: List[AudioFeatureSegment] = []
+    segments: list[AudioFeatureSegment] = []
 
     for t in range(T):
         start_sample = t * sr

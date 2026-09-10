@@ -1,15 +1,16 @@
 from __future__ import annotations
+
+from pathlib import Path
+
 import cv2
 import numpy as np
-from pathlib import Path
-from typing import Tuple, Optional
-from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
 import torch
+from PIL import Image
+from transformers import CLIPModel, CLIPProcessor
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import VisualFeatures, VisualFrameFeature
 from backend.pipeline.logging_setup import get_logger
+from backend.pipeline.schemas import VisualFeatures, VisualFrameFeature
+from backend.pipeline.workspace import Workspace
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 DEFAULT_CUT_THRESHOLD = 0.6
@@ -39,7 +40,7 @@ SCENE_LABELS = [
 
 # ── Helper functions ──────────────────────────────────────────────────────────
 
-def _load_clip_model(device: str) -> Tuple:
+def _load_clip_model(device: str) -> tuple:
     model_id = "openai/clip-vit-base-patch32"
     processor = CLIPProcessor.from_pretrained(model_id)
     model = CLIPModel.from_pretrained(model_id).to(device)
@@ -58,7 +59,7 @@ def _detect_black_frame(
     gray: np.ndarray,
     lum_max: float = BLACK_FRAME_LUMINANCE_MAX,
     var_max: float = BLACK_FRAME_VARIANCE_MAX,
-) -> Tuple[float, float, bool]:
+) -> tuple[float, float, bool]:
     """Return (mean_luminance, variance, is_black_frame)."""
     mean_lum = float(gray.mean())
     var_lum = float(gray.var())
@@ -80,7 +81,7 @@ def _compute_chroma_diff(prev_bgr: np.ndarray, curr_bgr: np.ndarray) -> float:
     true color content changes — a better signal for scene-cut detection than
     luma alone.
     """
-    def to_420_chroma(bgr: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def to_420_chroma(bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         ycbcr = cv2.cvtColor(bgr, cv2.COLOR_BGR2YCrCb)
         _, cb, cr = cv2.split(ycbcr)
         h, w = cb.shape
@@ -165,9 +166,9 @@ def extract_visual_features(
     log.info("Processing %d frames...", len(frame_files))
 
     frame_features = []
-    prev_hist: Optional[np.ndarray] = None
-    prev_gray: Optional[np.ndarray] = None
-    prev_bgr: Optional[np.ndarray] = None
+    prev_hist: np.ndarray | None = None
+    prev_gray: np.ndarray | None = None
+    prev_bgr: np.ndarray | None = None
 
     for frame_path in frame_files:
         frame_idx = int(frame_path.stem.split("_")[1])

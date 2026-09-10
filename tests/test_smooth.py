@@ -2,16 +2,17 @@
 Tests for backend/pipeline/fusion/smooth.py (Phase 3: temporal smoothing).
 """
 from __future__ import annotations
+
 import pytest
 
-from backend.pipeline.schemas import Segment, SegmentEvidence
 from backend.pipeline.fusion.smooth import (
     MIN_SEGMENT_DURATION,
-    merge_adjacent_same_label,
     absorb_short_segments,
+    merge_adjacent_same_label,
     renumber,
     smooth_pipeline,
 )
+from backend.pipeline.schemas import Segment, SegmentEvidence
 
 
 def _seg(sid: int, start: float, end: float, label: str = "core_content", confidence: float = 0.7, summary: str = "") -> Segment:
@@ -147,7 +148,7 @@ class TestAbsorbShort:
         # The short filler should merge into the higher-confidence right neighbor
         assert len(out) == 2
         # The right segment now spans [10, 20)
-        right = [s for s in out if s.label == "core_content"][0]
+        right = next(s for s in out if s.label == "core_content")
         assert right.start_sec == 10.0
         assert right.end_sec == 20.0
 

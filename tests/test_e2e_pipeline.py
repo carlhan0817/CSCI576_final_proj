@@ -21,23 +21,28 @@ synthetic MP4, the slow test ``test_real_pipeline_smoke`` does that — gated
 behind ``-m slow`` because it downloads models on first run.
 """
 from __future__ import annotations
+
+import itertools
 import json
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import pytest
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import (
-    Metadata, MetaRaw,
-    Transcript, TranscriptSegment,
-    VisualFeatures, VisualFrameFeature,
-    AudioFeatures, AudioFeatureSegment,
-    TextFeatures, TextFeatureSegment,
-)
 from backend.pipeline.fusion.run import run_fusion
-
+from backend.pipeline.schemas import (
+    AudioFeatures,
+    AudioFeatureSegment,
+    Metadata,
+    MetaRaw,
+    TextFeatures,
+    TextFeatureSegment,
+    Transcript,
+    TranscriptSegment,
+    VisualFeatures,
+    VisualFrameFeature,
+)
+from backend.pipeline.workspace import Workspace
 
 # Scene labels actually emitted by Phase 2 (V2.1 prompt list).
 SCENE_LABELS = [
@@ -107,7 +112,7 @@ def _build_synthetic_workspace(tmp_path: Path) -> Workspace:
 
     # ── Phase 2 artifact 1: visual_features.json ────────────────────────────
     # 1 FPS sampling → 60 frames.
-    frames: List[VisualFrameFeature] = []
+    frames: list[VisualFrameFeature] = []
     for t in range(int(duration)):
         clip_probs = {lbl: 0.05 for lbl in SCENE_LABELS}
         if t < 5:
@@ -143,7 +148,7 @@ def _build_synthetic_workspace(tmp_path: Path) -> Workspace:
     ws.visual_features_path.write_text(VisualFeatures(frames=frames).model_dump_json(indent=2))
 
     # ── Phase 2 artifact 2: audio_features.json (1-second grid) ─────────────
-    audio_segs: List[AudioFeatureSegment] = []
+    audio_segs: list[AudioFeatureSegment] = []
     for t in range(int(duration)):
         # Music in intro, sponsor, outro; speech in core sections
         if t < 5:
@@ -177,7 +182,7 @@ def _build_synthetic_workspace(tmp_path: Path) -> Workspace:
         6: [], 7: [],
         8: ["outro:thanks for watching"],
     }
-    text_segs: List[TextFeatureSegment] = []
+    text_segs: list[TextFeatureSegment] = []
     for s in sentences:
         # Sentences in adjacent windows are similar; sentences across boundaries are not.
         if s.id == 3:
@@ -255,7 +260,7 @@ class TestE2EPipeline:
         assert segs[0].start_sec == 0.0
         assert segs[-1].end_sec == metadata.video_info.duration_sec
         # Contiguous: every segment ends where the next begins
-        for a, b in zip(segs, segs[1:]):
+        for a, b in itertools.pairwise(segs):
             assert a.end_sec == b.start_sec, f"gap between segs at {a.end_sec} → {b.start_sec}"
 
     def test_segment_ids_are_unique_and_sequential(self, metadata: Metadata):

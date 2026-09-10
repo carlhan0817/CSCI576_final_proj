@@ -3,20 +3,21 @@ Tests for backend/pipeline/fusion/classify.py (Phase 3: per-segment
 classification).
 """
 from __future__ import annotations
+
 import numpy as np
 import pytest
 
-from backend.pipeline.schemas import TranscriptSegment
-from backend.pipeline.fusion.rules import RuleHit
 from backend.pipeline.fusion.classify import (
     CLIP_LABEL_TO_SEGMENT,
-    classify_segments,
     _aggregate_segment_features,
-    _resolve_rule_label_for_segment,
     _classify_by_clip_and_audio,
     _extract_segment_summary,
     _interval_overlap_seconds,
+    _resolve_rule_label_for_segment,
+    classify_segments,
 )
+from backend.pipeline.fusion.rules import RuleHit
+from backend.pipeline.schemas import TranscriptSegment
 
 
 def _basic_grid(T: int, **arrays) -> dict:

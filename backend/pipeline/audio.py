@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import subprocess
 from pathlib import Path
+
 import imageio_ffmpeg
 
 from backend.pipeline.workspace import Workspace

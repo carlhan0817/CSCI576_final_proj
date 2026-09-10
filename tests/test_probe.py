@@ -1,6 +1,7 @@
 import json
-from backend.pipeline.workspace import Workspace
+
 from backend.pipeline.probe import probe_video
+from backend.pipeline.workspace import Workspace
 
 
 def test_probe_writes_valid_meta_raw(tmp_path, synthetic_mp4):

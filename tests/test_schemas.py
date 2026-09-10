@@ -1,4 +1,5 @@
 import json
+
 from backend.pipeline.schemas import MetaRaw, Transcript, TranscriptSegment
 
 

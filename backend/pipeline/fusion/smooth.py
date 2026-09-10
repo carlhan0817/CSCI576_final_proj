@@ -5,9 +5,8 @@ Phase 3 Step 5: Temporal smoothing.
 - Absorb very short (< MIN_SEGMENT_DURATION) isolated segments into their neighbors.
 """
 from __future__ import annotations
-from typing import List
-from backend.pipeline.schemas import Segment, SegmentEvidence
 
+from backend.pipeline.schemas import Segment, SegmentEvidence
 
 MIN_SEGMENT_DURATION = 2.0  # seconds
 SPONSORSHIP_BRIDGE_MAX_GAP = 12.0  # max seconds of non-sponsorship between two sponsorship blocks to bridge
@@ -32,7 +31,7 @@ def _merge_two(a: Segment, b: Segment, new_id: int) -> Segment:
     )
 
 
-def merge_adjacent_same_label(segments: List[Segment]) -> List[Segment]:
+def merge_adjacent_same_label(segments: list[Segment]) -> list[Segment]:
     if not segments:
         return []
     out = [segments[0]]
@@ -44,7 +43,7 @@ def merge_adjacent_same_label(segments: List[Segment]) -> List[Segment]:
     return out
 
 
-def absorb_short_segments(segments: List[Segment]) -> List[Segment]:
+def absorb_short_segments(segments: list[Segment]) -> list[Segment]:
     """Absorb segments shorter than MIN_SEGMENT_DURATION into their neighbor with higher confidence."""
     if len(segments) <= 1:
         return segments
@@ -119,9 +118,9 @@ def absorb_short_segments(segments: List[Segment]) -> List[Segment]:
 
 
 def bridge_sponsorship_gaps(
-    segments: List[Segment],
+    segments: list[Segment],
     max_gap_sec: float = SPONSORSHIP_BRIDGE_MAX_GAP,
-) -> List[Segment]:
+) -> list[Segment]:
     """Fuse [sponsorship, X, sponsorship] when X is non-sponsorship and short.
 
     Real ad inserts often contain a mid-roll voiceover or stinger that breaks the
@@ -132,7 +131,7 @@ def bridge_sponsorship_gaps(
     if len(segments) < 3:
         return list(segments)
 
-    out: List[Segment] = []
+    out: list[Segment] = []
     i = 0
     while i < len(segments):
         if (
@@ -173,7 +172,7 @@ def bridge_sponsorship_gaps(
     return out
 
 
-def renumber(segments: List[Segment]) -> List[Segment]:
+def renumber(segments: list[Segment]) -> list[Segment]:
     """Reset segment_id to be 0..N-1 in order."""
     return [
         Segment(
@@ -190,7 +189,7 @@ def renumber(segments: List[Segment]) -> List[Segment]:
     ]
 
 
-def smooth_pipeline(segments: List[Segment]) -> List[Segment]:
+def smooth_pipeline(segments: list[Segment]) -> list[Segment]:
     """Run merge → absorb → merge → bridge sponsorship gaps → merge again → renumber."""
     s = merge_adjacent_same_label(segments)
     s = absorb_short_segments(s)

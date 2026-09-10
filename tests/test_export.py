@@ -13,23 +13,14 @@ Inputs are constructed directly from the schemas, embeddings are tiny fake
 arrays, and we verify the JSON output is valid against ``Metadata``.
 """
 from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import (
-    Metadata,
-    MetaRaw,
-    Segment,
-    SegmentEvidence,
-    Transcript,
-    TranscriptSegment,
-)
 from backend.pipeline.fusion.export import (
     ANALYSIS_VERSION,
     _pick_representative_sentence,
@@ -40,7 +31,15 @@ from backend.pipeline.fusion.export import (
     build_skip_suggestions,
     export_metadata,
 )
-
+from backend.pipeline.schemas import (
+    Metadata,
+    MetaRaw,
+    Segment,
+    SegmentEvidence,
+    Transcript,
+    TranscriptSegment,
+)
+from backend.pipeline.workspace import Workspace
 
 # ============================================================
 # Fixtures

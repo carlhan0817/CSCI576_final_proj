@@ -2,8 +2,8 @@ import json
 from types import SimpleNamespace
 
 from backend.pipeline import audio
-from backend.pipeline import transcribe as transcribe_mod
 from backend.pipeline import ingest as ingest_mod
+from backend.pipeline import transcribe as transcribe_mod
 
 
 def _fake_model():
@@ -47,7 +47,7 @@ def test_cache_skip_reruns_nothing_when_complete(tmp_path, synthetic_mp4, monkey
 
     calls = {"probe": 0, "audio": 0, "frames": 0, "transcribe": 0}
 
-    from backend.pipeline import probe, frames
+    from backend.pipeline import frames, probe
     monkeypatch.setattr(probe, "probe_video",
                         lambda *a, **kw: calls.__setitem__("probe", calls["probe"] + 1))
     monkeypatch.setattr(audio, "extract_audio",

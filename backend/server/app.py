@@ -1,13 +1,14 @@
 """FastAPI application factory for the player backend."""
 from __future__ import annotations
+
 import threading
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.server.config import ServerConfig
 from backend.server import routes
+from backend.server.config import ServerConfig
 
 
 def create_app(config: ServerConfig | None = None) -> FastAPI:

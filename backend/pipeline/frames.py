@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import subprocess
 from pathlib import Path
+
 import imageio_ffmpeg
 
 from backend.pipeline.workspace import Workspace
@@ -22,7 +24,7 @@ def sample_frames(
     scale_expr = (
         f"scale='if(gt(iw,ih),{longest_side},-2)':'if(gt(iw,ih),-2,{longest_side})'"
     )
-    qv = max(2, min(31, int(round((100 - jpeg_quality) / 3))))
+    qv = max(2, min(31, round((100 - jpeg_quality) / 3)))
 
     cmd = [
         _FFMPEG_EXE,

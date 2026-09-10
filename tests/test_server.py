@@ -1,12 +1,11 @@
 """Phase 4.5 player backend tests (happy + sad paths)."""
 from __future__ import annotations
+
 import json
-import os
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ServerConfig
@@ -110,8 +109,8 @@ def fake_repo(tmp_path):
 
 def _make_client(workspace: Path, videos: Path, frontend: Path) -> TestClient:
     """Build a TestClient with an explicit ServerConfig — no env vars, no module reload."""
-    from backend.server.config import ServerConfig
     from backend.server.app import create_app
+    from backend.server.config import ServerConfig
     cfg = ServerConfig(
         workspace_root=workspace,
         videos_root=videos,

@@ -2,21 +2,21 @@
 Phase 3 main entry point: run the full fusion pipeline on a workspace.
 """
 from __future__ import annotations
+
 import argparse
 import json
 import sys
 from pathlib import Path
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.logging_setup import get_logger
-from backend.pipeline.schemas import MetaRaw, Transcript
-
-from backend.pipeline.fusion.align import load_phase2_features, build_per_second_grid
-from backend.pipeline.fusion.rules import run_all_rules
+from backend.pipeline.fusion.align import build_per_second_grid, load_phase2_features
 from backend.pipeline.fusion.boundaries import find_boundaries
 from backend.pipeline.fusion.classify import classify_segments
-from backend.pipeline.fusion.smooth import smooth_pipeline
 from backend.pipeline.fusion.export import export_metadata
+from backend.pipeline.fusion.rules import run_all_rules
+from backend.pipeline.fusion.smooth import smooth_pipeline
+from backend.pipeline.logging_setup import get_logger
+from backend.pipeline.schemas import MetaRaw, Transcript
+from backend.pipeline.workspace import Workspace
 
 
 def run_fusion(workspace: Workspace) -> Path:

@@ -1,25 +1,25 @@
 from __future__ import annotations
-import json
-import numpy as np
-from pathlib import Path
-from typing import List
-from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import Transcript, TextFeatures, TextFeatureSegment
-from backend.pipeline.logging_setup import get_logger
+import json
+from pathlib import Path
+
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Import keyword groups from the rules module (single source of truth).
 # text.py detects matches; rules.py still uses the same lists for rule-hit
 # intervals — they no longer re-scan the text, they read matched_keywords.
 from backend.pipeline.fusion.rules import (
-    SPONSOR_KEYWORDS,
     INTRO_KEYWORDS,
     OUTRO_KEYWORDS,
-    SELF_PROMO_KEYWORDS,
     RECAP_KEYWORDS,
+    SELF_PROMO_KEYWORDS,
+    SPONSOR_KEYWORDS,
 )
+from backend.pipeline.logging_setup import get_logger
+from backend.pipeline.schemas import TextFeatures, TextFeatureSegment, Transcript
+from backend.pipeline.workspace import Workspace
 
 DEFAULT_SIMILARITY_THRESHOLD = 0.35
 
@@ -32,7 +32,7 @@ _KEYWORD_GROUPS = {
 }
 
 
-def _match_keywords(text: str) -> List[str]:
+def _match_keywords(text: str) -> list[str]:
     """
     Return a list of '<group>:<keyword>' strings for every keyword group that
     matches anywhere in `text` (case-insensitive). At most one match per group.

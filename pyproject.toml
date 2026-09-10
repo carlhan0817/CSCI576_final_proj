@@ -50,6 +50,15 @@ dev = [
 where = ["."]
 include = ["backend*"]
 
+[tool.ruff.lint]
+ignore = [
+    "C408",    # dict(...) call instead of literal — used for readability with many kwargs
+    "BLE001",  # blind except Exception — intentional defensive fallback at pipeline/API boundaries
+    "B008",    # FastAPI's File(...)/Depends(...) default-argument pattern
+    "ASYNC230", # sync file I/O inside async route handlers — files are local, not network I/O
+    "RUF059",  # unused variables from tuple-unpacking in tests, kept for readability
+]
+
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

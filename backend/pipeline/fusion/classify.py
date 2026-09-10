@@ -11,18 +11,19 @@ Strategy:
    core_content / filler / transition / etc. via a simple weighted scoring.
 """
 from __future__ import annotations
+
 import numpy as np
-from typing import Dict, List, Tuple
 
-from backend.pipeline.schemas import (
-    Segment, SegmentEvidence, TextFeatures, TranscriptSegment,
-)
 from backend.pipeline.fusion.rules import RuleHit
-
+from backend.pipeline.schemas import (
+    Segment,
+    SegmentEvidence,
+    TranscriptSegment,
+)
 
 # Map CLIP scene label substrings → SegmentLabels (covers all 10 V2.1 prompts).
 # Substring matching against the raw label string (SCENE_LABELS in visual.py).
-CLIP_LABEL_TO_SEGMENT: Dict[str, str] = {
+CLIP_LABEL_TO_SEGMENT: dict[str, str] = {
     # Core content
     "presentation slide": "core_content",
     "person talking":     "core_content",
@@ -45,10 +46,10 @@ def _interval_overlap_seconds(s1: int, e1: int, s2: int, e2: int) -> int:
 
 
 def _aggregate_segment_features(
-    grid: Dict[str, np.ndarray],
+    grid: dict[str, np.ndarray],
     start_sec: int,
     end_sec: int,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute mean values over [start, end) for all numeric grid columns."""
     agg = {}
     for k, arr in grid.items():
@@ -68,11 +69,11 @@ def _aggregate_segment_features(
 
 
 def _resolve_rule_label_for_segment(
-    rule_hits: List[RuleHit],
+    rule_hits: list[RuleHit],
     start_sec: int,
     end_sec: int,
     coverage_threshold: float = 0.25,
-) -> Tuple[str, float, List[str]]:
+) -> tuple[str, float, list[str]]:
     """
     Find the strongest rule covering this segment.
     Returns (label, confidence, list_of_rule_names) or ("", 0.0, []) if none.
@@ -92,13 +93,13 @@ def _resolve_rule_label_for_segment(
     return best.label, best.confidence, triggered
 
 
-def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict[str, float]]:
+def _classify_by_clip_and_audio(agg: dict[str, float]) -> tuple[str, float, dict[str, float]]:
     """
     No rule matched → use CLIP + audio heuristic.
     Returns (label, confidence, {visual_score, audio_score, text_score}).
     """
     # Visual score: take the strongest CLIP label and map it
-    clip_keys = [k for k in agg.keys() if k.startswith("clip_")]
+    clip_keys = [k for k in agg if k.startswith("clip_")]
     if not clip_keys:
         return "core_content", 0.3, {"visual": 0.0, "audio": 0.0, "text": 0.0}
     
@@ -133,7 +134,7 @@ def _classify_by_clip_and_audio(agg: Dict[str, float]) -> Tuple[str, float, Dict
 
 
 def _extract_segment_summary(
-    transcript_segments: List[TranscriptSegment],
+    transcript_segments: list[TranscriptSegment],
     start_sec: float,
     end_sec: float,
 ) -> str:
@@ -155,15 +156,15 @@ def _extract_segment_summary(
 
 
 def classify_segments(
-    grid: Dict[str, np.ndarray],
-    boundaries: List[int],
-    rule_hits: List[RuleHit],
-    transcript_segments: List[TranscriptSegment],
-) -> List[Segment]:
+    grid: dict[str, np.ndarray],
+    boundaries: list[int],
+    rule_hits: list[RuleHit],
+    transcript_segments: list[TranscriptSegment],
+) -> list[Segment]:
     """
     Build the list of Segment objects from candidate boundaries + features + rules.
     """
-    segments: List[Segment] = []
+    segments: list[Segment] = []
     for i in range(len(boundaries) - 1):
         s = boundaries[i]
         e = boundaries[i + 1]

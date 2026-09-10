@@ -10,6 +10,7 @@ Usage:
     python -m backend.pipeline.features.run path/to/video.mp4 --force
 """
 from __future__ import annotations
+
 import argparse
 import gc
 import sys
@@ -17,12 +18,11 @@ from pathlib import Path
 
 import torch
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.logging_setup import get_logger
-from backend.pipeline.features.visual import extract_visual_features
 from backend.pipeline.features.audio import extract_audio_features
 from backend.pipeline.features.text import extract_text_features
-
+from backend.pipeline.features.visual import extract_visual_features
+from backend.pipeline.logging_setup import get_logger
+from backend.pipeline.workspace import Workspace
 
 DEFAULT_WORKSPACE_ROOT = Path(__file__).resolve().parents[3] / "workspace"
 

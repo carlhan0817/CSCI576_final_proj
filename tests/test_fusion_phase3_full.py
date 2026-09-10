@@ -4,42 +4,48 @@ classify, rules (holding_screen, run_all_rules), smooth, and export.
 Complements test_fusion_phase3.py which covers only the 4 documented fixes.
 """
 from __future__ import annotations
-import json
-import numpy as np
-import pytest
-from pathlib import Path
-from typing import Dict, List
 
-from backend.pipeline.schemas import (
-    AudioFeatures, AudioFeatureSegment,
-    VisualFeatures, VisualFrameFeature,
-    TextFeatures, TextFeatureSegment,
-    Segment, SegmentEvidence, Chapter, MetaRaw,
-)
+import json
+from pathlib import Path
+
+import numpy as np
+
 from backend.pipeline.fusion.align import build_per_second_grid
-from backend.pipeline.fusion.boundaries import find_boundaries, MIN_BOUNDARY_GAP_SEC
+from backend.pipeline.fusion.boundaries import find_boundaries
 from backend.pipeline.fusion.classify import (
     _classify_by_clip_and_audio,
     _resolve_rule_label_for_segment,
     classify_segments,
-)
-from backend.pipeline.fusion.rules import (
-    RuleHit, rule_holding_screen, run_all_rules,
-)
-from backend.pipeline.fusion.smooth import (
-    merge_adjacent_same_label,
-    absorb_short_segments,
-    renumber,
-    smooth_pipeline,
-    MIN_SEGMENT_DURATION,
 )
 from backend.pipeline.fusion.export import (
     build_chapters,
     build_skip_suggestions,
     export_metadata,
 )
+from backend.pipeline.fusion.rules import (
+    RuleHit,
+    rule_holding_screen,
+    run_all_rules,
+)
+from backend.pipeline.fusion.smooth import (
+    MIN_SEGMENT_DURATION,
+    absorb_short_segments,
+    merge_adjacent_same_label,
+    renumber,
+    smooth_pipeline,
+)
+from backend.pipeline.schemas import (
+    AudioFeatures,
+    AudioFeatureSegment,
+    MetaRaw,
+    Segment,
+    SegmentEvidence,
+    TextFeatures,
+    TextFeatureSegment,
+    VisualFeatures,
+    VisualFrameFeature,
+)
 from backend.pipeline.workspace import Workspace
-
 
 # ── Shared builders ───────────────────────────────────────────────────────────
 
@@ -52,17 +58,17 @@ def _seg(sid: int, start: float, end: float, label: str,
     )
 
 
-def _make_audio(segments_kwargs: List[dict]) -> AudioFeatures:
+def _make_audio(segments_kwargs: list[dict]) -> AudioFeatures:
     segs = [AudioFeatureSegment(**kw) for kw in segments_kwargs]
     return AudioFeatures(segments=segs)
 
 
-def _make_visual(frames_kwargs: List[dict]) -> VisualFeatures:
+def _make_visual(frames_kwargs: list[dict]) -> VisualFeatures:
     frames = [VisualFrameFeature(**kw) for kw in frames_kwargs]
     return VisualFeatures(frames=frames)
 
 
-def _make_text(segs_kwargs: List[dict]) -> TextFeatures:
+def _make_text(segs_kwargs: list[dict]) -> TextFeatures:
     segs = [TextFeatureSegment(**kw) for kw in segs_kwargs]
     return TextFeatures(segments=segs)
 
@@ -89,8 +95,8 @@ def _minimal_text() -> TextFeatures:
     return TextFeatures(segments=[])
 
 
-def _grid(T: int, **overrides) -> Dict[str, np.ndarray]:
-    g: Dict[str, np.ndarray] = {
+def _grid(T: int, **overrides) -> dict[str, np.ndarray]:
+    g: dict[str, np.ndarray] = {
         "is_speech":        np.zeros(T, dtype=np.int8),
         "is_hard_cut":      np.zeros(T, dtype=np.int8),
         "hist_diff":        np.zeros(T, dtype=np.float32),
@@ -237,7 +243,7 @@ class TestBoundariesSignals:
         # First half: all probability on label A; second half: all on label B
         clip_a = np.array([1.0 if t < 10 else 0.0 for t in range(T)], dtype=np.float32)
         clip_b = np.array([0.0 if t < 10 else 1.0 for t in range(T)], dtype=np.float32)
-        g = _grid(T, **{"clip_labelA": clip_a, "clip_labelB": clip_b})
+        g = _grid(T, clip_labelA=clip_a, clip_labelB=clip_b)
         assert 10 in find_boundaries(g)
 
     def test_signal3_low_text_sim_adds_boundary(self):
@@ -338,7 +344,7 @@ class TestClassifyByClipAndAudio:
 
 
 class TestClassifySegments:
-    def _minimal_grid(self, T: int) -> Dict[str, np.ndarray]:
+    def _minimal_grid(self, T: int) -> dict[str, np.ndarray]:
         return _grid(T, **{"clip_presentation slide": np.ones(T, dtype=np.float32)})
 
     def test_returns_correct_segment_count(self):

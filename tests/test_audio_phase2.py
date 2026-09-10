@@ -5,23 +5,25 @@ Happy cases: correct feature values on known synthetic audio.
 Sad cases: zero-duration audio, silent audio, missing file.
 """
 from __future__ import annotations
+
 import json
-import wave
 import math
-import numpy as np
-import pytest
+import wave
 from pathlib import Path
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import AudioFeatures
+import numpy as np
+import pytest
+
 from backend.pipeline.features.audio import (
+    MUSIC_RMS_THRESHOLD,
+    SILENCE_RMS_THRESHOLD,
+    SPEECH_ZCR_THRESHOLD,
     _classify_audio_class,
     _compute_second_features,
     extract_audio_features,
-    SILENCE_RMS_THRESHOLD,
-    SPEECH_ZCR_THRESHOLD,
-    MUSIC_RMS_THRESHOLD,
 )
+from backend.pipeline.schemas import AudioFeatures
+from backend.pipeline.workspace import Workspace
 
 
 def _write_wav(path: Path, samples: np.ndarray, sr: int = 16000) -> None:

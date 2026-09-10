@@ -2,27 +2,24 @@
 Tests for backend/pipeline/fusion/rules.py (Phase 3: hard rule triggers).
 """
 from __future__ import annotations
-import numpy as np
-import pytest
 
-from backend.pipeline.schemas import TextFeatures, TextFeatureSegment
+import numpy as np
+
 from backend.pipeline.fusion.rules import (
-    RuleHit,
     DEAD_AIR_MIN_DURATION,
-    DEAD_AIR_RMS_THRESHOLD,
     HOLDING_SCREEN_MIN_DURATION,
     INTRO_WINDOW_SEC,
-    OUTRO_WINDOW_SEC,
     _find_runs,
     rule_dead_air,
     rule_holding_screen,
-    rule_sponsor_keyword,
-    rule_self_promo_keyword,
-    rule_recap_keyword,
     rule_intro_window,
     rule_outro_window,
+    rule_recap_keyword,
+    rule_self_promo_keyword,
+    rule_sponsor_keyword,
     run_all_rules,
 )
+from backend.pipeline.schemas import TextFeatures, TextFeatureSegment
 
 
 def _grid(T: int, **arrays) -> dict:

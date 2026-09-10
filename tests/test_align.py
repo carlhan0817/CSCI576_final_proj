@@ -5,19 +5,22 @@ These verify that visual @ 1 FPS, audio @ 1 Hz, and sentence-level text are
 correctly resampled onto a unified per-second grid.
 """
 from __future__ import annotations
-import json
+
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from backend.pipeline.workspace import Workspace
-from backend.pipeline.schemas import (
-    AudioFeatures, AudioFeatureSegment,
-    VisualFeatures, VisualFrameFeature,
-    TextFeatures, TextFeatureSegment,
-)
 from backend.pipeline.fusion.align import build_per_second_grid, load_phase2_features
+from backend.pipeline.schemas import (
+    AudioFeatures,
+    AudioFeatureSegment,
+    TextFeatures,
+    TextFeatureSegment,
+    VisualFeatures,
+    VisualFrameFeature,
+)
+from backend.pipeline.workspace import Workspace
 
 
 def _audio(n: int, **overrides) -> AudioFeatures:
@@ -137,7 +140,7 @@ class TestVisualAlignment:
         assert "hist_diff" in grid
         assert (grid["hist_diff"] == 0).all()
         # No clip_* columns when there are no frames.
-        assert not any(k.startswith("clip_") for k in grid.keys())
+        assert not any(k.startswith("clip_") for k in grid)
 
 
 class TestTextAlignment:
