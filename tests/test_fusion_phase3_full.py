@@ -42,6 +42,7 @@ from backend.pipeline.schemas import (
     SegmentEvidence,
     TextFeatures,
     TextFeatureSegment,
+    TranscriptSegment,
     VisualFeatures,
     VisualFrameFeature,
 )
@@ -71,6 +72,10 @@ def _make_visual(frames_kwargs: list[dict]) -> VisualFeatures:
 def _make_text(segs_kwargs: list[dict]) -> TextFeatures:
     segs = [TextFeatureSegment(**kw) for kw in segs_kwargs]
     return TextFeatures(segments=segs)
+
+
+def _transcript_seg(sid: int, start: float, end: float, text: str) -> TranscriptSegment:
+    return TranscriptSegment(id=sid, start=start, end=end, text=text)
 
 
 def _minimal_audio(T: int) -> AudioFeatures:
@@ -295,13 +300,13 @@ class TestResolveRuleLabel:
 
     def test_partial_coverage_above_threshold_returns_label(self):
         label, conf, _ = _resolve_rule_label_for_segment(
-            [self._hit(0, 8)], 0, 10  # 80% coverage ≥ 50% threshold
+            [self._hit(0, 8)], 0, 10  # 80% coverage ≥ 25% threshold
         )
         assert label == "sponsorship"
 
     def test_partial_coverage_below_threshold_returns_empty(self):
         label, conf, _ = _resolve_rule_label_for_segment(
-            [self._hit(0, 4)], 0, 10  # 40% coverage < 50% threshold
+            [self._hit(0, 2)], 0, 10  # 20% coverage < 25% threshold
         )
         assert label == ""
         assert conf == 0.0
@@ -558,7 +563,11 @@ class TestBuildChapters:
             _seg(1, 10, 20, "core_content", summary="Second topic"),
             _seg(2, 20, 30, "outro"),
         ]
-        chapters = build_chapters(segs)
+        transcript = [
+            _transcript_seg(0, 0, 10, "First topic sentence"),
+            _transcript_seg(1, 10, 20, "Second topic sentence"),
+        ]
+        chapters = build_chapters(segs, transcript, None)
         assert len(chapters) == 1
         assert chapters[0].start_sec == 0
         assert chapters[0].end_sec == 20
@@ -569,29 +578,37 @@ class TestBuildChapters:
             _seg(1, 10, 20, "sponsorship"),
             _seg(2, 20, 30, "core_content", summary="Part two"),
         ]
-        chapters = build_chapters(segs)
+        transcript = [
+            _transcript_seg(0, 0, 10, "Part one sentence"),
+            _transcript_seg(1, 20, 30, "Part two sentence"),
+        ]
+        chapters = build_chapters(segs, transcript, None)
         assert len(chapters) == 2
         assert chapters[0].end_sec == 10
         assert chapters[1].start_sec == 20
 
     def test_no_core_content_returns_empty(self):
         segs = [_seg(0, 0, 10, "sponsorship"), _seg(1, 10, 20, "outro")]
-        chapters = build_chapters(segs)
+        chapters = build_chapters(segs, [], None)
         assert chapters == []
 
-    def test_chapter_title_from_summary(self):
+    def test_chapter_title_from_longest_sentence_without_embeddings(self):
         segs = [_seg(0, 0, 30, "core_content", summary="Signal processing basics")]
-        chapters = build_chapters(segs)
-        assert "Signal" in chapters[0].title
+        transcript = [
+            _transcript_seg(0, 0, 15, "Short one."),
+            _transcript_seg(1, 15, 30, "Signal processing basics explained in detail."),
+        ]
+        chapters = build_chapters(segs, transcript, None)
+        assert "Signal processing basics" in chapters[0].title
 
-    def test_empty_summary_gets_fallback_title(self):
+    def test_no_sentences_in_window_gets_fallback_title(self):
         segs = [_seg(0, 0, 30, "core_content", summary="")]
-        chapters = build_chapters(segs)
-        assert chapters[0].title != ""
+        chapters = build_chapters(segs, [], None)
+        assert chapters[0].title == "Chapter 1"
 
     # Sad
     def test_empty_segments_returns_empty(self):
-        assert build_chapters([]) == []
+        assert build_chapters([], [], None) == []
 
 
 class TestBuildSkipSuggestions:
